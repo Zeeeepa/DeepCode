@@ -1,0 +1,33 @@
+(repair) wwchdemac@ethanMacBook-Air frontend % npm start                      
+
+> photo-cutout-tool-frontend@1.0.0 start
+> react-scripts start
+
+Could not find a required file.
+  Name: index.js
+  Searched in: /Users/wwchdemac/python_projects/debug_agent/test_input/photo_cutout_tool/frontend/src
+(repair) wwchdemac@ethanMacBook-Air frontend % 
+
+(repair) wwchdemac@ethanMacBook-Air backend % cd ..
+(repair) wwchdemac@ethanMacBook-Air photo_cutout_tool % cd ..
+(repair) wwchdemac@ethanMacBook-Air test_input % cd photo_cutout_tool 
+(repair) wwchdemac@ethanMacBook-Air photo_cutout_tool % cd backend 
+(repair) wwchdemac@ethanMacBook-Air backend % uvicorn main:app --reload
+INFO:     Will watch for changes in these directories: ['/Users/wwchdemac/python_projects/debug_agent/test_input/photo_cutout_tool/backend']
+INFO:     Uvicorn running on http://127.0.0.1:8000 (Press CTRL+C to quit)
+INFO:     Started reloader process [96136] using StatReload
+INFO:     Started server process [96138]
+INFO:     Waiting for application startup.
+INFO:     Application startup complete.
+
+
+
+
+
+
+
+
+
+
+
+
