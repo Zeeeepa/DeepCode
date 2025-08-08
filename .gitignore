@@ -208,6 +208,10 @@ test_*.py
 *_test.py
 demo_*.py
 !demo_agents.py
+!demo_complex_debug.py
+!demo_photo_debug.py
+!rice_paper_demo.py
+!forget_paper_demo.py
 
 # 配置文件
 config.json
