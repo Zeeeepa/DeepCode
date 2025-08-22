@@ -448,6 +448,46 @@ class CodeImplementationAgent:
             except Exception as e:
                 self.logger.error(f"Failed to create code summary: {e}")
 
+    # async def _track_file_implementation_with_summary(
+    #     self, tool_call: Dict, result: Any
+    # ):
+    #     """
+    #     Track file implementation and create code summary
+
+    #     Args:
+    #         tool_call: The write_file tool call
+    #         result: Result of the tool execution
+    #     """
+    #     # First do the regular tracking
+    #     self._track_file_implementation(tool_call, result)
+
+    #     # Then create and save code summary if memory agent is available
+    #     if self.memory_agent and self.llm_client and self.llm_client_type:
+    #         try:
+    #             file_path = tool_call["input"].get("file_path")
+    #             file_content = tool_call["input"].get("content", "")
+
+    #             if file_path and file_content:
+    #                 # Create code implementation summary
+    #                 summary = await self.memory_agent.create_multi_code_implementation_summary(
+    #                     self.llm_client,
+    #                     self.llm_client_type,
+    #                     file_path,
+    #                     file_content,
+    #                     self.get_files_implemented_count(),  # Pass the current file count
+    #                 )
+
+    #                 self.logger.info(
+    #                     f"Created code summary for implemented file: {file_path}, summary: {summary[:100]}..."
+    #                 )
+    #             else:
+    #                 self.logger.warning(
+    #                     "Missing file path or content for summary generation"
+    #                 )
+
+    #         except Exception as e:
+    #             self.logger.error(f"Failed to create code summary: {e}")
+
     def _track_file_implementation(self, tool_call: Dict, result: Any):
         """
         Track file implementation progress

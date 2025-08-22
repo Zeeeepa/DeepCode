@@ -473,10 +473,16 @@ class ConciseMemoryAgent:
 
             # Format summary with only Implementation Progress and Dependencies for file saving
             file_summary_content = ""
-            if sections.get("implementation_progress"):
-                file_summary_content += sections["implementation_progress"] + "\n\n"
-            if sections.get("dependencies"):
-                file_summary_content += sections["dependencies"] + "\n\n"
+            if sections.get("core_purpose"):
+                file_summary_content += sections["core_purpose"] + "\n\n"
+            if sections.get("public_interface"):
+                file_summary_content += sections["public_interface"] + "\n\n"
+            if sections.get("internal_dependencies"):
+                file_summary_content += sections["internal_dependencies"] + "\n\n"
+            if sections.get("external_dependencies"):
+                file_summary_content += sections["external_dependencies"] + "\n\n"
+            if sections.get("implementation_notes"):
+                file_summary_content += sections["implementation_notes"] + "\n\n"
 
             # Create the formatted summary for file saving (without Next Steps)
             formatted_summary = self._format_code_implementation_summary(
@@ -578,9 +584,17 @@ class ConciseMemoryAgent:
             llm_summary: Raw LLM-generated summary text
 
         Returns:
-            Dictionary with extracted sections: implementation_progress, dependencies, next_steps
+            Dictionary with extracted sections: core_purpose, public_interface, internal_dependencies, 
+            external_dependencies, implementation_notes, next_steps
         """
-        sections = {"implementation_progress": "", "dependencies": "", "next_steps": ""}
+        sections = {
+            "core_purpose": "",
+            "public_interface": "",
+            "internal_dependencies": "",
+            "external_dependencies": "",
+            "implementation_notes": "",
+            "next_steps": ""
+        }
 
         try:
             lines = llm_summary.split("\n")
@@ -591,17 +605,30 @@ class ConciseMemoryAgent:
                 line_lower = line.lower().strip()
 
                 # Check for section headers
-                if "implementation progress" in line_lower:
+                if "core purpose" in line_lower:
                     if current_section and current_content:
                         sections[current_section] = "\n".join(current_content).strip()
-                    current_section = "implementation_progress"
+                    current_section = "core_purpose"
                     current_content = [line]  # Include the header
-                elif (
-                    "dependencies" in line_lower and "implementation" not in line_lower
-                ):
+                elif "public interface" in line_lower:
                     if current_section and current_content:
                         sections[current_section] = "\n".join(current_content).strip()
-                    current_section = "dependencies"
+                    current_section = "public_interface"
+                    current_content = [line]  # Include the header
+                elif "internal dependencies" in line_lower:
+                    if current_section and current_content:
+                        sections[current_section] = "\n".join(current_content).strip()
+                    current_section = "internal_dependencies"
+                    current_content = [line]  # Include the header
+                elif "external dependencies" in line_lower:
+                    if current_section and current_content:
+                        sections[current_section] = "\n".join(current_content).strip()
+                    current_section = "external_dependencies"
+                    current_content = [line]  # Include the header
+                elif "implementation notes" in line_lower:
+                    if current_section and current_content:
+                        sections[current_section] = "\n".join(current_content).strip()
+                    current_section = "implementation_notes"
                     current_content = [line]  # Include the header
                 elif "next steps" in line_lower:
                     if current_section and current_content:
@@ -621,8 +648,8 @@ class ConciseMemoryAgent:
 
         except Exception as e:
             self.logger.error(f"Failed to extract summary sections: {e}")
-            # Fallback: put everything in implementation_progress
-            sections["implementation_progress"] = llm_summary
+            # Fallback: put everything in core_purpose
+            sections["core_purpose"] = llm_summary
 
         return sections
 
