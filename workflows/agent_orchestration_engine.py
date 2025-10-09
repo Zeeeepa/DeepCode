@@ -64,119 +64,114 @@ os.environ["PYTHONDONTWRITEBYTECODE"] = "1"  # Prevent .pyc file generation
 
 def _assess_output_completeness(text: str) -> float:
     """
-    智能评估输出完整性的高级算法
-
-    使用多种启发式方法来检测输出是否被截断：
-    1. 结构化标记完整性检查
-    2. 句子完整性分析
-    3. 代码块完整性验证
-    4. 预期内容元素检查
-
+    精准评估YAML格式实现计划的完整性
+    
+    基于CODE_PLANNING_PROMPT_TRADITIONAL的实际要求：
+    1. 检查5个必需的YAML sections是否都存在
+    2. 验证YAML结构的完整性（开始和结束标记）
+    3. 检查最后一行是否被截断
+    4. 验证最小合理长度
+    
     Returns:
         float: 完整性分数 (0.0-1.0)，越高表示越完整
     """
-    if not text or len(text.strip()) < 100:
+    if not text or len(text.strip()) < 500:
         return 0.0
-
+    
     score = 0.0
-    factors = 0
-
-    # 1. 基本长度检查 (权重: 0.2)
-    if len(text) > 5000:  # 期望的最小输出长度
-        score += 0.2
-    elif len(text) > 2000:
-        score += 0.1
-    factors += 1
-
-    # 2. 结构完整性检查 (权重: 0.3)
-    structure_indicators = [
-        "## 1.",
-        "## 2.",
-        "## 3.",  # 章节标题
-        "```",
-        "file_structure",
-        "implementation",
-        "algorithm",
-        "method",
-        "function",
+    text_lower = text.lower()
+    
+    # 1. 检查5个必需的YAML sections (权重: 0.5 - 最重要)
+    # 这是prompt明确要求的5个sections
+    required_sections = [
+        "file_structure:",
+        "implementation_components:",
+        "validation_approach:",
+        "environment_setup:",
+        "implementation_strategy:"
     ]
-    structure_count = sum(
-        1 for indicator in structure_indicators if indicator.lower() in text.lower()
-    )
-    if structure_count >= 6:
-        score += 0.3
-    elif structure_count >= 3:
-        score += 0.15
-    factors += 1
-
-    # 3. 句子完整性检查 (权重: 0.2)
+    
+    sections_found = sum(1 for section in required_sections if section in text_lower)
+    section_score = sections_found / len(required_sections)
+    score += section_score * 0.5
+    
+    print(f"   📋 Required sections: {sections_found}/{len(required_sections)}")
+    
+    # 2. 检查YAML结构完整性 (权重: 0.2)
+    has_yaml_start = any(marker in text for marker in ["```yaml", "complete_reproduction_plan:", "paper_info:"])
+    has_yaml_end = any(marker in text[-500:] for marker in ["```", "implementation_strategy:", "validation_approach:"])
+    
+    if has_yaml_start and has_yaml_end:
+        score += 0.2
+    elif has_yaml_start:
+        score += 0.1
+    
+    # 3. 检查最后一行完整性 (权重: 0.15)
     lines = text.strip().split("\n")
     if lines:
         last_line = lines[-1].strip()
-        # 检查最后一行是否是完整的句子或结构化内容
+        # YAML的最后一行通常是缩进的内容行或结束标记
         if (
-            last_line.endswith((".", ":", "```", "!", "?"))
-            or last_line.startswith(("##", "-", "*", "`"))
-            or len(last_line) < 10
-        ):  # 很短的行可能是列表项
-            score += 0.2
-        elif len(last_line) > 50 and not last_line.endswith(
-            (".", ":", "```", "!", "?")
+            last_line.endswith(("```", ".", ":", "]", "}"))
+            or last_line.startswith(("-", "*", " "))  # YAML列表项或缩进内容
+            or (len(last_line) < 100 and not last_line.endswith(","))  # 短行且不是被截断的
         ):
-            # 长行但没有适当结尾，可能被截断
-            score += 0.05
-    factors += 1
-
-    # 4. 代码实现计划完整性 (权重: 0.3)
-    implementation_keywords = [
-        "file structure",
-        "architecture",
-        "implementation",
-        "requirements",
-        "dependencies",
-        "setup",
-        "main",
-        "class",
-        "function",
-        "method",
-        "algorithm",
-    ]
-    impl_count = sum(
-        1 for keyword in implementation_keywords if keyword.lower() in text.lower()
-    )
-    if impl_count >= 8:
-        score += 0.3
-    elif impl_count >= 4:
+            score += 0.15
+        else:
+            # 长行且没有合适的结尾，很可能被截断
+            print(f"   ⚠️  Last line suspicious: '{last_line[-50:]}'")
+    
+    # 4. 检查合理的最小长度 (权重: 0.15)
+    # 一个完整的5-section计划应该至少8000字符
+    length = len(text)
+    if length >= 10000:
         score += 0.15
-    factors += 1
-
-    return min(score, 1.0)  # 确保不超过1.0
+    elif length >= 5000:
+        score += 0.10
+    elif length >= 2000:
+        score += 0.05
+    
+    print(f"   📏 Content length: {length} chars")
+    
+    return min(score, 1.0)
 
 
 def _adjust_params_for_retry(params: RequestParams, retry_count: int) -> RequestParams:
     """
-    动态调整请求参数以提高成功率
-
-    基于重试次数智能调整参数：
-    - 增加token限制
-    - 调整temperature
-    - 优化其他参数
+    激进的token增长策略以确保完整输出
+    
+    策略说明：
+    - 第1次重试：大幅增加到40000 tokens（确保有足够空间输出完整YAML）
+    - 第2次重试：进一步增加到60000 tokens（处理极端情况）
+    - 降低temperature提高稳定性和可预测性
+    
+    为什么需要这么多tokens？
+    - ParallelLLM的fan_out agents会生成长篇分析结果（各5000+ tokens）
+    - fan_in agent接收这些结果作为输入context
+    - 需要输出包含5个详细sections的完整YAML（10000+ tokens）
+    - 因此需要为OUTPUT预留充足的token空间
     """
-    # 基础token增量：每次重试增加更多tokens
-    token_increment = 4096 * (retry_count + 1)
-    new_max_tokens = min(
-        params.max_tokens + token_increment, 32768
-    )  # 不超过32K的合理限制
-
-    # 随着重试次数增加，降低temperature以获得更一致的输出
-    new_temperature = max(params.temperature - (retry_count * 0.1), 0.1)
-
+    # 激进的token增长策略
+    if retry_count == 0:
+        # 第一次重试：直接跳到40K，确保有足够输出空间
+        new_max_tokens = 40000
+    elif retry_count == 1:
+        # 第二次重试：进一步增加到60K
+        new_max_tokens = 60000
+    else:
+        # 第三次及以上：使用最大限制
+        new_max_tokens = 80000
+    
+    # 随着重试次数增加，降低temperature以获得更一致、更可预测的输出
+    new_temperature = max(params.temperature - (retry_count * 0.15), 0.05)
+    
     print(f"🔧 Adjusting parameters for retry {retry_count + 1}:")
-    print(f"   Token limit: {params.max_tokens} → {new_max_tokens}")
-    print(f"   Temperature: {params.temperature} → {new_temperature}")
-
+    print(f"   Token limit: {params.maxTokens} → {new_max_tokens}")
+    print(f"   Temperature: {params.temperature:.2f} → {new_temperature:.2f}")
+    print(f"   💡 Strategy: Ensure sufficient output space for complete 5-section YAML")
+    
     return RequestParams(
-        max_tokens=new_max_tokens,
+        maxTokens=new_max_tokens,  # 注意：使用 camelCase
         temperature=new_temperature,
     )
 
@@ -349,12 +344,12 @@ async def run_research_analyzer(prompt_text: str, logger) -> str:
 
             # Set higher token output for research analysis
             analysis_params = RequestParams(
-                max_tokens=6144,
+                maxTokens=6144,  # 使用 camelCase
                 temperature=0.3,
             )
 
             print(
-                f"🔄 Making LLM request with params: max_tokens={analysis_params.max_tokens}, temperature={analysis_params.temperature}"
+                f"🔄 Making LLM request with params: maxTokens={analysis_params.maxTokens}, temperature={analysis_params.temperature}"
             )
 
             try:
@@ -441,7 +436,7 @@ async def run_resource_processor(analysis_result: str, logger) -> str:
 
         # Set higher token output for resource processing
         processor_params = RequestParams(
-            max_tokens=4096,
+            maxTokens=4096,  # 使用 camelCase
             temperature=0.2,
         )
 
@@ -502,22 +497,21 @@ async def run_code_analyzer(
     )
 
     # Advanced token management system with dynamic scaling
-    # 检查是否使用分段模式以动态调整token限制
+    # 关键优化：ParallelLLM需要为输出预留充足空间
+    # fan_in agent会接收fan_out agents的完整输出作为context，然后需要生成完整YAML
     if use_segmentation:
-        # 分段模式：可以使用更高的token限制，因为输入已经被优化
-        max_tokens_limit = 16384  # 使用更高限制，因为分段减少了输入复杂性
+        # 分段模式：输入已优化，但仍需大量输出空间
+        max_tokens_limit = 30000  # 充足的输出空间确保5个sections完整生成
         temperature = 0.2  # 稍微降低temperature以提高一致性
-        print(
-            "🧠 Using SEGMENTED mode: Higher token limit (16384) with optimized inputs"
-        )
+        print("🧠 Using SEGMENTED mode: max_tokens=30000 for complete YAML output")
     else:
-        # 传统模式：使用保守的token限制并启用增量生成
-        max_tokens_limit = 12288  # 中等限制，为聚合输出留出空间
+        # 传统模式：需要更多输出空间应对长篇分析结果
+        max_tokens_limit = 30000  # 足够的空间确保完整输出
         temperature = 0.3
-        print("🧠 Using TRADITIONAL mode: Moderate token limit (12288)")
+        print("🧠 Using TRADITIONAL mode: max_tokens=30000 for complete YAML output")
 
     enhanced_params = RequestParams(
-        max_tokens=max_tokens_limit,
+        maxTokens=max_tokens_limit,  # 注意：使用 camelCase 而不是 snake_case
         temperature=temperature,
     )
 
@@ -599,7 +593,7 @@ async def github_repo_download(search_result: str, paper_dir: str, logger) -> st
 
         # Set higher token output for GitHub download
         github_params = RequestParams(
-            max_tokens=4096,
+            maxTokens=4096,  # 使用 camelCase
             temperature=0.1,
         )
 
@@ -1298,12 +1292,12 @@ async def run_chat_planning_agent(user_input: str, logger) -> str:
 
             # Set higher token output for comprehensive planning
             planning_params = RequestParams(
-                max_tokens=8192,  # Higher token limit for detailed plans
+                maxTokens=8192,  # 使用 camelCase - Higher token limit for detailed plans
                 temperature=0.2,  # Lower temperature for more structured output
             )
 
             print(
-                f"🔄 Making LLM request with params: max_tokens={planning_params.max_tokens}, temperature={planning_params.temperature}"
+                f"🔄 Making LLM request with params: maxTokens={planning_params.maxTokens}, temperature={planning_params.temperature}"
             )
 
             # Format the input message for the agent
@@ -1737,130 +1731,3 @@ The following implementation plan was generated by the AI chat planning agent:
     except Exception as e:
         print(f"Error in execute_chat_based_planning_pipeline: {e}")
         raise e
-
-
-async def run_requirement_analysis_agent(
-    user_input: str,
-    analysis_mode: str,
-    user_answers: Dict[str, str] = None,
-    logger=None,
-) -> str:
-    """
-    Run requirement analysis Agent for question generation or requirement summarization
-
-    Args:
-        user_input: User's initial requirement description
-        analysis_mode: Analysis mode ("generate_questions" or "summarize_requirements")
-        user_answers: User's answer dictionary for questions (only used in summarize_requirements mode)
-        logger: Logger instance
-
-    Returns:
-        str: Generated question JSON string or detailed requirement document
-    """
-    try:
-        print(f"🧠 Starting requirement analysis Agent, mode: {analysis_mode}")
-        print(f"Input length: {len(user_input) if user_input else 0}")
-
-        if not user_input or user_input.strip() == "":
-            raise ValueError("User input cannot be empty")
-
-        # Import requirement analysis Agent
-        from workflows.agents.requirement_analysis_agent import RequirementAnalysisAgent
-
-        # Create requirement analysis Agent instance
-        async with RequirementAnalysisAgent(logger=logger) as req_agent:
-            if analysis_mode == "generate_questions":
-                # Generate guiding questions
-                print("📝 Generating guiding questions...")
-                questions = await req_agent.generate_guiding_questions(user_input)
-                return json.dumps(questions, ensure_ascii=False, indent=2)
-
-            elif analysis_mode == "summarize_requirements":
-                # Summarize detailed requirements
-                print("📋 Summarizing detailed requirements...")
-                if user_answers is None:
-                    user_answers = {}
-                summary = await req_agent.summarize_detailed_requirements(
-                    user_input, user_answers
-                )
-                return summary
-
-            else:
-                raise ValueError(f"Unsupported analysis mode: {analysis_mode}")
-
-    except Exception as e:
-        print(f"❌ Requirement analysis Agent execution failed: {e}")
-        print(f"Exception details: {type(e).__name__}: {str(e)}")
-        raise
-
-
-async def execute_requirement_analysis_workflow(
-    user_input: str,
-    analysis_mode: str,
-    user_answers: Dict[str, str] = None,
-    logger=None,
-    progress_callback: Optional[Callable] = None,
-) -> Dict[str, Any]:
-    """
-    Execute user requirement analysis workflow
-
-    This function supports two modes:
-    1. generate_questions: Generate guiding questions based on user initial requirements
-    2. summarize_requirements: Generate detailed requirement document based on user answers
-
-    Args:
-        user_input: User's initial requirement description
-        analysis_mode: Analysis mode ("generate_questions" or "summarize_requirements")
-        user_answers: User's answer dictionary for questions
-        logger: Logger instance
-        progress_callback: Progress callback function
-
-    Returns:
-        Dict[str, Any]: Dictionary containing analysis results
-    """
-    try:
-        print(f"🧠 Starting requirement analysis workflow, mode: {analysis_mode}")
-
-        if progress_callback:
-            if analysis_mode == "generate_questions":
-                progress_callback(
-                    10,
-                    "🤔 Analyzing user requirements, generating guiding questions...",
-                )
-            else:
-                progress_callback(
-                    10,
-                    "📝 Integrating user answers, generating detailed requirement document...",
-                )
-
-        # Call requirement analysis Agent
-        result = await run_requirement_analysis_agent(
-            user_input=user_input,
-            analysis_mode=analysis_mode,
-            user_answers=user_answers,
-            logger=logger,
-        )
-
-        if progress_callback:
-            progress_callback(100, "✅ Requirement analysis completed!")
-
-        return {
-            "status": "success",
-            "mode": analysis_mode,
-            "result": result,
-            "message": f"Requirement analysis ({analysis_mode}) executed successfully",
-        }
-
-    except Exception as e:
-        error_msg = f"Requirement analysis workflow execution failed: {str(e)}"
-        print(f"❌ {error_msg}")
-
-        if progress_callback:
-            progress_callback(0, f"❌ {error_msg}")
-
-        return {
-            "status": "error",
-            "mode": analysis_mode,
-            "error": error_msg,
-            "message": "Requirement analysis workflow execution failed",
-        }
