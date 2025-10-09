@@ -65,22 +65,22 @@ os.environ["PYTHONDONTWRITEBYTECODE"] = "1"  # Prevent .pyc file generation
 def _assess_output_completeness(text: str) -> float:
     """
     精准评估YAML格式实现计划的完整性
-    
+
     基于CODE_PLANNING_PROMPT_TRADITIONAL的实际要求：
     1. 检查5个必需的YAML sections是否都存在
     2. 验证YAML结构的完整性（开始和结束标记）
     3. 检查最后一行是否被截断
     4. 验证最小合理长度
-    
+
     Returns:
         float: 完整性分数 (0.0-1.0)，越高表示越完整
     """
     if not text or len(text.strip()) < 500:
         return 0.0
-    
+
     score = 0.0
     text_lower = text.lower()
-    
+
     # 1. 检查5个必需的YAML sections (权重: 0.5 - 最重要)
     # 这是prompt明确要求的5个sections
     required_sections = [
@@ -88,24 +88,30 @@ def _assess_output_completeness(text: str) -> float:
         "implementation_components:",
         "validation_approach:",
         "environment_setup:",
-        "implementation_strategy:"
+        "implementation_strategy:",
     ]
-    
+
     sections_found = sum(1 for section in required_sections if section in text_lower)
     section_score = sections_found / len(required_sections)
     score += section_score * 0.5
-    
+
     print(f"   📋 Required sections: {sections_found}/{len(required_sections)}")
-    
+
     # 2. 检查YAML结构完整性 (权重: 0.2)
-    has_yaml_start = any(marker in text for marker in ["```yaml", "complete_reproduction_plan:", "paper_info:"])
-    has_yaml_end = any(marker in text[-500:] for marker in ["```", "implementation_strategy:", "validation_approach:"])
-    
+    has_yaml_start = any(
+        marker in text
+        for marker in ["```yaml", "complete_reproduction_plan:", "paper_info:"]
+    )
+    has_yaml_end = any(
+        marker in text[-500:]
+        for marker in ["```", "implementation_strategy:", "validation_approach:"]
+    )
+
     if has_yaml_start and has_yaml_end:
         score += 0.2
     elif has_yaml_start:
         score += 0.1
-    
+
     # 3. 检查最后一行完整性 (权重: 0.15)
     lines = text.strip().split("\n")
     if lines:
@@ -114,13 +120,15 @@ def _assess_output_completeness(text: str) -> float:
         if (
             last_line.endswith(("```", ".", ":", "]", "}"))
             or last_line.startswith(("-", "*", " "))  # YAML列表项或缩进内容
-            or (len(last_line) < 100 and not last_line.endswith(","))  # 短行且不是被截断的
+            or (
+                len(last_line) < 100 and not last_line.endswith(",")
+            )  # 短行且不是被截断的
         ):
             score += 0.15
         else:
             # 长行且没有合适的结尾，很可能被截断
             print(f"   ⚠️  Last line suspicious: '{last_line[-50:]}'")
-    
+
     # 4. 检查合理的最小长度 (权重: 0.15)
     # 一个完整的5-section计划应该至少8000字符
     length = len(text)
@@ -130,21 +138,21 @@ def _assess_output_completeness(text: str) -> float:
         score += 0.10
     elif length >= 2000:
         score += 0.05
-    
+
     print(f"   📏 Content length: {length} chars")
-    
+
     return min(score, 1.0)
 
 
 def _adjust_params_for_retry(params: RequestParams, retry_count: int) -> RequestParams:
     """
     激进的token增长策略以确保完整输出
-    
+
     策略说明：
     - 第1次重试：大幅增加到40000 tokens（确保有足够空间输出完整YAML）
     - 第2次重试：进一步增加到60000 tokens（处理极端情况）
     - 降低temperature提高稳定性和可预测性
-    
+
     为什么需要这么多tokens？
     - ParallelLLM的fan_out agents会生成长篇分析结果（各5000+ tokens）
     - fan_in agent接收这些结果作为输入context
@@ -161,15 +169,15 @@ def _adjust_params_for_retry(params: RequestParams, retry_count: int) -> Request
     else:
         # 第三次及以上：使用最大限制
         new_max_tokens = 80000
-    
+
     # 随着重试次数增加，降低temperature以获得更一致、更可预测的输出
     new_temperature = max(params.temperature - (retry_count * 0.15), 0.05)
-    
+
     print(f"🔧 Adjusting parameters for retry {retry_count + 1}:")
     print(f"   Token limit: {params.maxTokens} → {new_max_tokens}")
     print(f"   Temperature: {params.temperature:.2f} → {new_temperature:.2f}")
-    print(f"   💡 Strategy: Ensure sufficient output space for complete 5-section YAML")
-    
+    print("   💡 Strategy: Ensure sufficient output space for complete 5-section YAML")
+
     return RequestParams(
         maxTokens=new_max_tokens,  # 注意：使用 camelCase
         temperature=new_temperature,

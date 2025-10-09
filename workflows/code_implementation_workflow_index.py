@@ -618,7 +618,7 @@ Requirements:
     def _repair_truncated_json(self, json_str: str, tool_name: str = "") -> dict:
         """
         Advanced JSON repair for truncated or malformed JSON from LLM responses.
-        
+
         Handles:
         - Missing closing braces/brackets
         - Truncated string values
@@ -626,80 +626,80 @@ Requirements:
         - Trailing commas
         """
         import re
-        
+
         # Step 1: Try basic fixes first
         fixed = json_str.strip()
-        
+
         # Remove trailing commas
-        fixed = re.sub(r',\s*}', '}', fixed)
-        fixed = re.sub(r',\s*]', ']', fixed)
-        
+        fixed = re.sub(r",\s*}", "}", fixed)
+        fixed = re.sub(r",\s*]", "]", fixed)
+
         try:
             return json.loads(fixed)
         except json.JSONDecodeError as e:
-            print(f"   🔧 Attempting advanced JSON repair...")
-            
+            print("   🔧 Attempting advanced JSON repair...")
+
             # Step 2: Check for truncation issues
             if e.msg == "Expecting value":
                 # Likely truncated - try to close open structures
                 fixed = self._close_json_structures(fixed)
                 try:
                     return json.loads(fixed)
-                except:
+                except (json.JSONDecodeError, ValueError, TypeError):
                     pass
-            
+
             # Step 3: Try to extract partial valid JSON
             if e.msg.startswith("Expecting") and e.pos:
                 # Truncate at error position and try to close
-                truncated = fixed[:e.pos]
+                truncated = fixed[: e.pos]
                 closed = self._close_json_structures(truncated)
                 try:
                     partial = json.loads(closed)
-                    print(f"   ✅ Extracted partial JSON successfully")
+                    print("   ✅ Extracted partial JSON successfully")
                     return partial
-                except:
+                except (json.JSONDecodeError, ValueError, TypeError):
                     pass
-            
+
             # Step 4: Tool-specific defaults for critical tools
             if tool_name == "write_file":
                 # For write_file, try to extract at least file_path
                 file_path_match = re.search(r'"file_path"\s*:\s*"([^"]*)"', fixed)
                 if file_path_match:
-                    print(f"   ⚠️  write_file JSON truncated, using minimal structure")
+                    print("   ⚠️  write_file JSON truncated, using minimal structure")
                     return {
                         "file_path": file_path_match.group(1),
-                        "content": ""  # Empty content is better than crashing
+                        "content": "",  # Empty content is better than crashing
                     }
-            
+
             # Step 5: Last resort - return error indicator
-            print(f"   ❌ JSON repair failed completely")
+            print("   ❌ JSON repair failed completely")
             return None
-    
+
     def _close_json_structures(self, json_str: str) -> str:
         """
         Intelligently close unclosed JSON structures.
         Counts braces and brackets to determine what needs closing.
         """
         # Count open structures
-        open_braces = json_str.count('{') - json_str.count('}')
-        open_brackets = json_str.count('[') - json_str.count(']')
-        
+        open_braces = json_str.count("{") - json_str.count("}")
+        open_brackets = json_str.count("[") - json_str.count("]")
+
         # Check if we're in the middle of a string
         quote_count = json_str.count('"')
         in_string = (quote_count % 2) != 0
-        
+
         result = json_str
-        
+
         # Close string if needed
         if in_string:
             result += '"'
-        
+
         # Close brackets first (inner structures)
-        result += ']' * open_brackets
-        
+        result += "]" * open_brackets
+
         # Close braces
-        result += '}' * open_braces
-        
+        result += "}" * open_braces
+
         return result
 
     async def _call_openai_with_tools(
@@ -761,22 +761,23 @@ Requirements:
                     )
                 except json.JSONDecodeError as e:
                     # Detailed JSON parsing error logging
-                    print(f"\n❌ JSON Parsing Error in tool call:")
+                    print("\n❌ JSON Parsing Error in tool call:")
                     print(f"   Tool: {tool_call.function.name}")
                     print(f"   Error: {e}")
-                    print(f"   Raw arguments (first 500 chars):")
+                    print("   Raw arguments (first 500 chars):")
                     print(f"   {tool_call.function.arguments[:500]}")
                     print(f"   Error position: line {e.lineno}, column {e.colno}")
-                    print(f"   Problem at: ...{tool_call.function.arguments[max(0, e.pos-50):e.pos+50]}...")
-                    
+                    print(
+                        f"   Problem at: ...{tool_call.function.arguments[max(0, e.pos-50):e.pos+50]}..."
+                    )
+
                     # Attempt advanced JSON repair
                     repaired = self._repair_truncated_json(
-                        tool_call.function.arguments, 
-                        tool_call.function.name
+                        tool_call.function.arguments, tool_call.function.name
                     )
-                    
+
                     if repaired:
-                        print(f"   ✅ JSON repaired successfully")
+                        print("   ✅ JSON repaired successfully")
                         tool_calls.append(
                             {
                                 "id": tool_call.id,
@@ -786,7 +787,7 @@ Requirements:
                         )
                     else:
                         # Skip this tool call if repair failed
-                        print(f"   ⚠️  Skipping unrepairable tool call")
+                        print("   ⚠️  Skipping unrepairable tool call")
                         continue
 
         return {"content": content, "tool_calls": tool_calls}
@@ -816,7 +817,7 @@ Requirements:
             try:
                 if hasattr(result["result"], "content") and result["result"].content:
                     content_text = result["result"].content[0].text
-                    
+
                     # First attempt: try direct JSON parsing
                     try:
                         parsed_result = json.loads(content_text)
@@ -824,27 +825,29 @@ Requirements:
                             return True
                     except json.JSONDecodeError as e:
                         # JSON parsing failed - try to repair
-                        print(f"\n⚠️  JSON parsing failed in tool result check:")
+                        print("\n⚠️  JSON parsing failed in tool result check:")
                         print(f"   Error: {e}")
-                        print(f"   Position: line {e.lineno}, column {e.colno}, char {e.pos}")
+                        print(
+                            f"   Position: line {e.lineno}, column {e.colno}, char {e.pos}"
+                        )
                         print(f"   Content length: {len(content_text)} chars")
                         print(f"   First 300 chars: {content_text[:300]}")
-                        
+
                         # Attempt to repair the JSON
                         repaired = self._repair_truncated_json(content_text)
                         if repaired:
-                            print(f"   ✅ Tool result JSON repaired successfully")
+                            print("   ✅ Tool result JSON repaired successfully")
                             if repaired.get("status") == "error":
                                 return True
                         else:
                             # Fallback: check for "error" keyword in text
                             if "error" in content_text.lower():
                                 return True
-                                
+
                 elif isinstance(result["result"], str):
                     if "error" in result["result"].lower():
                         return True
-                        
+
             except (AttributeError, IndexError) as e:
                 # Unexpected result structure
                 print(f"\n⚠️  Unexpected result structure: {type(e).__name__}: {e}")
