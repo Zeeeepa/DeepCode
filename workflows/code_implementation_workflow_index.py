@@ -705,7 +705,7 @@ Requirements:
     async def _call_openai_with_tools(
         self, client, system_message, messages, tools, max_tokens
     ):
-        """Call OpenAI API with robust JSON error handling"""
+        """Call OpenAI API with robust JSON error handling and retry mechanism"""
         openai_tools = []
         for tool in tools:
             openai_tools.append(
@@ -722,29 +722,98 @@ Requirements:
         openai_messages = [{"role": "system", "content": system_message}]
         openai_messages.extend(messages)
 
-        # Try max_tokens first, fallback to max_completion_tokens if unsupported
-        try:
-            response = await client.chat.completions.create(
-                model=self.default_models["openai"],
-                messages=openai_messages,
-                tools=openai_tools if openai_tools else None,
-                max_tokens=max_tokens,
-                temperature=0.2,
-            )
-        except Exception as e:
-            if "max_tokens" in str(e) and "max_completion_tokens" in str(e):
-                # Retry with max_completion_tokens for models that require it
-                response = await client.chat.completions.create(
-                    model=self.default_models["openai"],
-                    messages=openai_messages,
-                    tools=openai_tools if openai_tools else None,
-                    max_completion_tokens=max_tokens,
-                )
-            else:
-                raise
+        # Retry mechanism for API calls
+        max_retries = 3
+        retry_delay = 2  # seconds
 
-        message = response.choices[0].message
-        content = message.content or ""
+        for attempt in range(max_retries):
+            try:
+                # Try max_tokens first, fallback to max_completion_tokens if unsupported
+                try:
+                    response = await client.chat.completions.create(
+                        model=self.default_models["openai"],
+                        messages=openai_messages,
+                        tools=openai_tools if openai_tools else None,
+                        max_tokens=max_tokens,
+                        temperature=0.2,
+                    )
+                except Exception as e:
+                    if "max_tokens" in str(e) and "max_completion_tokens" in str(e):
+                        # Retry with max_completion_tokens for models that require it
+                        response = await client.chat.completions.create(
+                            model=self.default_models["openai"],
+                            messages=openai_messages,
+                            tools=openai_tools if openai_tools else None,
+                            max_completion_tokens=max_tokens,
+                        )
+                    else:
+                        raise
+
+                # Validate response structure
+                if (
+                    not response
+                    or not hasattr(response, "choices")
+                    or not response.choices
+                ):
+                    raise ValueError("Invalid API response: missing choices")
+
+                if not response.choices[0] or not hasattr(
+                    response.choices[0], "message"
+                ):
+                    raise ValueError("Invalid API response: missing message in choice")
+
+                message = response.choices[0].message
+                content = message.content or ""
+
+                # Successfully got a valid response
+                break
+
+            except json.JSONDecodeError as e:
+                print(
+                    f"\n❌ JSON Decode Error in API response (attempt {attempt + 1}/{max_retries}):"
+                )
+                print(f"   Error: {e}")
+                print(f"   Position: line {e.lineno}, column {e.colno}")
+
+                if attempt < max_retries - 1:
+                    print(f"   ⏳ Retrying in {retry_delay} seconds...")
+                    await asyncio.sleep(retry_delay)
+                    retry_delay *= 2  # Exponential backoff
+                else:
+                    print("   ❌ All retries exhausted")
+                    raise
+
+            except (ValueError, AttributeError, TypeError) as e:
+                print(f"\n❌ API Response Error (attempt {attempt + 1}/{max_retries}):")
+                print(f"   Error type: {type(e).__name__}")
+                print(f"   Error: {e}")
+
+                if attempt < max_retries - 1:
+                    print(f"   ⏳ Retrying in {retry_delay} seconds...")
+                    await asyncio.sleep(retry_delay)
+                    retry_delay *= 2
+                else:
+                    print("   ❌ All retries exhausted")
+                    # Return empty response instead of crashing
+                    return {
+                        "content": "API error - unable to get valid response",
+                        "tool_calls": [],
+                    }
+
+            except Exception as e:
+                print(
+                    f"\n❌ Unexpected API Error (attempt {attempt + 1}/{max_retries}):"
+                )
+                print(f"   Error type: {type(e).__name__}")
+                print(f"   Error: {e}")
+
+                if attempt < max_retries - 1:
+                    print(f"   ⏳ Retrying in {retry_delay} seconds...")
+                    await asyncio.sleep(retry_delay)
+                    retry_delay *= 2
+                else:
+                    print("   ❌ All retries exhausted")
+                    raise
 
         tool_calls = []
         if message.tool_calls:

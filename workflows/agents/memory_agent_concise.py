@@ -61,8 +61,8 @@ class ConciseMemoryAgent:
 
         # Store default models configuration
         self.default_models = default_models or {
-            "anthropic": "claude-sonnet-4-20250514",
-            "openai": "gpt-4o",
+            "anthropic": "anthropic/claude-sonnet-4.5",
+            "openai": "anthropic/claude-sonnet-4.5",
         }
 
         # Memory state tracking - new logic: trigger after each write_file
@@ -996,6 +996,15 @@ class ConciseMemoryAgent:
         # Get formatted file lists
         file_lists = self.get_formatted_files_lists()
         implemented_files_list = file_lists["implemented"]
+        unimplemented_files_list = file_lists["unimplemented"]
+
+        # Debug output for unimplemented files (clean format without dashes)
+        unimplemented_files = self.get_unimplemented_files()
+        print("✅ Unimplemented Files:")
+        for file_path in unimplemented_files:
+            print(f"{file_path}")
+        if self.current_next_steps.strip():
+            print(f"\n📋 {self.current_next_steps}")
 
         # 1. Add initial plan message (always preserved)
         initial_plan_message = {
@@ -1012,7 +1021,12 @@ class ConciseMemoryAgent:
 
 **Current Status:** {files_implemented} files implemented
 
-**Objective:** Continue implementation by analyzing dependencies and implementing the next required file according to the plan's priority order.""",
+**Remaining Files to Implement:**
+{unimplemented_files_list}
+
+**IMPORTANT:** If the remaining files list shows "All files implemented!", you MUST reply with "All files implemented" to complete the task. Do NOT continue calling tools.
+
+**Objective:** {"Reply 'All files implemented' to finish" if not unimplemented_files else "Continue implementation by analyzing dependencies and implementing the next required file according to the plan's priority order."}""",
         }
 
         # Append Next Steps information if available
@@ -1020,14 +1034,6 @@ class ConciseMemoryAgent:
             initial_plan_message["content"] += (
                 f"\n\n**Next Steps (from previous analysis):**\n{self.current_next_steps}"
             )
-
-        # Debug output for unimplemented files (clean format without dashes)
-        unimplemented_files = self.get_unimplemented_files()
-        print("✅ Unimplemented Files:")
-        for file_path in unimplemented_files:
-            print(f"{file_path}")
-        if self.current_next_steps.strip():
-            print(f"\n📋 {self.current_next_steps}")
 
         concise_messages.append(initial_plan_message)
 
@@ -1039,13 +1045,15 @@ class ConciseMemoryAgent:
 
 **Development Cycle - START HERE:**
 
-**For NEW file implementation:**
+**FIRST - Check completion status:**
+- If "Remaining Files to Implement" above shows "All files implemented!", reply "All files implemented" immediately
+
+**For NEW file implementation (if remaining files exist):**
 1. **You need to call read_code_mem(already_implemented_file_path)** to understand existing implementations and dependencies - agent should choose relevant ALREADY IMPLEMENTED file paths for reference, NOT the new file you want to create
 2. Write_file can be used to implement the new component
 3. Finally: Use execute_python or execute_bash for testing (if needed)
 
-**When all files implemented:**
-**Use execute_python or execute_bash** to test the complete implementation""",
+**Remember:** Stop and declare completion when all files are done!""",
         }
         concise_messages.append(knowledge_base_message)
 
@@ -1320,12 +1328,35 @@ class ConciseMemoryAgent:
     def get_unimplemented_files(self) -> List[str]:
         """
         Get list of files that haven't been implemented yet
+        Uses fuzzy path matching to handle partial paths
 
         Returns:
             List of file paths that still need to be implemented
         """
-        implemented_set = set(self.implemented_files)
-        unimplemented = [f for f in self.all_files_list if f not in implemented_set]
+
+        def is_implemented(plan_file: str) -> bool:
+            """Check if a file from plan is implemented (with fuzzy matching)"""
+            # Normalize paths for comparison
+            plan_file_normalized = plan_file.replace("\\", "/").strip("/")
+
+            for impl_file in self.implemented_files:
+                impl_file_normalized = impl_file.replace("\\", "/").strip("/")
+
+                # Check if plan_file ends with impl_file (partial path match)
+                # or impl_file ends with plan_file (reverse partial match)
+                if plan_file_normalized.endswith(
+                    impl_file_normalized
+                ) or impl_file_normalized.endswith(plan_file_normalized):
+                    # Ensure match is at a path boundary (not middle of directory name)
+                    if (
+                        plan_file_normalized.endswith("/" + impl_file_normalized)
+                        or plan_file_normalized == impl_file_normalized
+                        or impl_file_normalized.endswith("/" + plan_file_normalized)
+                    ):
+                        return True
+            return False
+
+        unimplemented = [f for f in self.all_files_list if not is_implemented(f)]
         return unimplemented
 
     def get_formatted_files_lists(self) -> Dict[str, str]:

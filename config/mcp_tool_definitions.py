@@ -26,11 +26,11 @@ class MCPToolDefinitions:
         """
         return [
             MCPToolDefinitions._get_read_file_tool(),
-            MCPToolDefinitions._get_read_multiple_files_tool(),
+            # MCPToolDefinitions._get_read_multiple_files_tool(),
             MCPToolDefinitions._get_read_code_mem_tool(),
             MCPToolDefinitions._get_write_file_tool(),
-            MCPToolDefinitions._get_write_multiple_files_tool(),
-            MCPToolDefinitions._get_execute_python_tool(),
+            # MCPToolDefinitions._get_write_multiple_files_tool(),
+            # MCPToolDefinitions._get_execute_python_tool(),
             MCPToolDefinitions._get_execute_bash_tool(),
         ]
 

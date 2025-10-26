@@ -289,10 +289,10 @@ Requirements:
         target_directory,
     ):
         """Pure code implementation loop with memory optimization and phase consistency"""
-        max_iterations = 500
+        max_iterations = 800
         iteration = 0
         start_time = time.time()
-        max_time = 2400  # 40 minutes
+        max_time = 7200  # 120 minutes (2 hours)
 
         # Initialize specialized agents
         code_agent = CodeImplementationAgent(
@@ -704,7 +704,7 @@ Requirements:
     async def _call_openai_with_tools(
         self, client, system_message, messages, tools, max_tokens
     ):
-        """Call OpenAI API with robust JSON error handling"""
+        """Call OpenAI API with robust JSON error handling and retry mechanism"""
         openai_tools = []
         for tool in tools:
             openai_tools.append(
@@ -721,29 +721,98 @@ Requirements:
         openai_messages = [{"role": "system", "content": system_message}]
         openai_messages.extend(messages)
 
-        # Try max_tokens first, fallback to max_completion_tokens if unsupported
-        try:
-            response = await client.chat.completions.create(
-                model=self.default_models["openai"],
-                messages=openai_messages,
-                tools=openai_tools if openai_tools else None,
-                max_tokens=max_tokens,
-                temperature=0.2,
-            )
-        except Exception as e:
-            if "max_tokens" in str(e) and "max_completion_tokens" in str(e):
-                # Retry with max_completion_tokens for models that require it
-                response = await client.chat.completions.create(
-                    model=self.default_models["openai"],
-                    messages=openai_messages,
-                    tools=openai_tools if openai_tools else None,
-                    max_completion_tokens=max_tokens,
-                )
-            else:
-                raise
+        # Retry mechanism for API calls
+        max_retries = 3
+        retry_delay = 2  # seconds
 
-        message = response.choices[0].message
-        content = message.content or ""
+        for attempt in range(max_retries):
+            try:
+                # Try max_tokens first, fallback to max_completion_tokens if unsupported
+                try:
+                    response = await client.chat.completions.create(
+                        model=self.default_models["openai"],
+                        messages=openai_messages,
+                        tools=openai_tools if openai_tools else None,
+                        max_tokens=max_tokens,
+                        temperature=0.2,
+                    )
+                except Exception as e:
+                    if "max_tokens" in str(e) and "max_completion_tokens" in str(e):
+                        # Retry with max_completion_tokens for models that require it
+                        response = await client.chat.completions.create(
+                            model=self.default_models["openai"],
+                            messages=openai_messages,
+                            tools=openai_tools if openai_tools else None,
+                            max_completion_tokens=max_tokens,
+                        )
+                    else:
+                        raise
+
+                # Validate response structure
+                if (
+                    not response
+                    or not hasattr(response, "choices")
+                    or not response.choices
+                ):
+                    raise ValueError("Invalid API response: missing choices")
+
+                if not response.choices[0] or not hasattr(
+                    response.choices[0], "message"
+                ):
+                    raise ValueError("Invalid API response: missing message in choice")
+
+                message = response.choices[0].message
+                content = message.content or ""
+
+                # Successfully got a valid response
+                break
+
+            except json.JSONDecodeError as e:
+                print(
+                    f"\n❌ JSON Decode Error in API response (attempt {attempt + 1}/{max_retries}):"
+                )
+                print(f"   Error: {e}")
+                print(f"   Position: line {e.lineno}, column {e.colno}")
+
+                if attempt < max_retries - 1:
+                    print(f"   ⏳ Retrying in {retry_delay} seconds...")
+                    await asyncio.sleep(retry_delay)
+                    retry_delay *= 2  # Exponential backoff
+                else:
+                    print("   ❌ All retries exhausted")
+                    raise
+
+            except (ValueError, AttributeError, TypeError) as e:
+                print(f"\n❌ API Response Error (attempt {attempt + 1}/{max_retries}):")
+                print(f"   Error type: {type(e).__name__}")
+                print(f"   Error: {e}")
+
+                if attempt < max_retries - 1:
+                    print(f"   ⏳ Retrying in {retry_delay} seconds...")
+                    await asyncio.sleep(retry_delay)
+                    retry_delay *= 2
+                else:
+                    print("   ❌ All retries exhausted")
+                    # Return empty response instead of crashing
+                    return {
+                        "content": "API error - unable to get valid response",
+                        "tool_calls": [],
+                    }
+
+            except Exception as e:
+                print(
+                    f"\n❌ Unexpected API Error (attempt {attempt + 1}/{max_retries}):"
+                )
+                print(f"   Error type: {type(e).__name__}")
+                print(f"   Error: {e}")
+
+                if attempt < max_retries - 1:
+                    print(f"   ⏳ Retrying in {retry_delay} seconds...")
+                    await asyncio.sleep(retry_delay)
+                    retry_delay *= 2
+                else:
+                    print("   ❌ All retries exhausted")
+                    raise
 
         tool_calls = []
         if message.tool_calls:
@@ -866,7 +935,8 @@ Requirements:
 🎯 **Next Action:** Check if ALL files from the reproduction plan are implemented.
 
 ⚡ **Decision Process:**
-1. **If MORE files need implementation:** Continue with dependency-aware workflow:
+1. **If ALL files implemented:** Reply with "All files implemented" to complete the task
+2. **If MORE files need implementation:** Continue with dependency-aware workflow:
    - **Start with `read_code_mem`** to understand existing implementations and dependencies
    - **Then `write_file`** to implement the new component
    - **Finally: Test** if needed
@@ -881,11 +951,10 @@ Requirements:
 1. Review the error details above
 2. Fix the identified issue
 3. **Check if ALL files from the reproduction plan are implemented:**
-   - **If YES:** Use `execute_python` or `execute_bash` to test the complete implementation, then respond "**implementation complete**" to end the conversation
+   - **If YES:** Respond "**implementation complete**" to end the conversation
    - **If NO:** Continue with proper development cycle for next file:
      - **Start with `read_code_mem`** to understand existing implementations
      - **Then `write_file`** to implement properly
-     - **Test** if needed
 4. Ensure proper error handling in future implementations
 
 💡 **Remember:** Always verify if all planned files are implemented before continuing with new file creation."""
@@ -896,15 +965,16 @@ Requirements:
 
 📊 **Current Progress:** {files_count} files implemented
 
-🚨 **Action Required:** You must use tools. **FIRST check if ALL files from the reproduction plan are implemented:**
+🚨 **Action Required:** Check completion status NOW:
 
 ⚡ **Decision Process:**
-1. **If MORE files need implementation:** Follow the development cycle:
+1. **If ALL files from plan are implemented:** Reply "All files implemented" to complete
+2. **If MORE files need implementation:** Use tools to continue:
    - **Start with `read_code_mem`** to understand existing implementations
    - **Then `write_file`** to implement the new component
    - **Finally: Test** if needed
 
-🚨 **Critical:** Always verify completion status first, then use appropriate tools - not just explanations!"""
+🚨 **Critical:** Don't just explain - either declare completion or use tools!"""
 
     def _compile_user_response(self, tool_results: List[Dict], guidance: str) -> str:
         """Compile tool results and guidance into a single user response"""
@@ -1080,9 +1150,9 @@ async def main():
         # Ask if user wants to continue with actual workflow
         print("\nContinuing with workflow execution...")
 
-        plan_file = "/Users/lizongwei/Desktop/DeepCode_Project/workbase/DeepCode_papertest/deepcode_lab/papers/3/initial_plan.txt"
+        plan_file = "/Users/lizongwei/Desktop/DeepCode_Project/workbase/DeepCode_papertest/deepcode_lab/papers/23/initial_plan.txt"
         # plan_file = "/data2/bjdwhzzh/project-hku/Code-Agent2.0/Code-Agent/deepcode-mcp/agent_folders/papers/1/initial_plan.txt"
-        target_directory = "/Users/lizongwei/Desktop/DeepCode_Project/workbase/DeepCode_papertest/deepcode_lab/papers/3/"
+        target_directory = "/Users/lizongwei/Desktop/DeepCode_Project/workbase/DeepCode_papertest/deepcode_lab/papers/23/"
         print("Implementation Mode Selection:")
         print("1. Pure Code Implementation Mode (Recommended)")
         print("2. Iterative Implementation Mode")
