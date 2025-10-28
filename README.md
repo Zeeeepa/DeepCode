@@ -259,7 +259,7 @@ DeepCode (**73.5%**) significantly outperforms all tested LLM agents, including 
 </div>
 <br/>
 
-### 🎯 **Autonomous Multi-Agent Workflow**
+### 🎯 **Autonomous Self-Orchestrating Multi-Agent Architecture**
 
 **The Challenges**:
 
