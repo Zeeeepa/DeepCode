@@ -231,6 +231,34 @@
 
 <br/>
 
+---
+
+
+## 📊 Experimental Results
+
+We evaluate **DeepCode** on the PaperBench Code-Dev benchmark, a rigorous testbed requiring AI agents to independently reproduce 20 ICML 2024 papers from scratch. The benchmark comprises 8,316 gradable components assessed using SimpleJudge with hierarchical weighting. Our experiments compare DeepCode against four baseline categories: (1) Human Experts, (2) Commercial Code Agents, (3) Scientific Code Agents, and (4) LLM-Based Agents.
+
+### ① Human Expert Performance (Top ML PhD)
+
+DeepCode achieves **75.9%** on the 3-paper human evaluation subset (with Claude Sonnet 4.5-thinking), surpassing the best-of-3 human expert baseline (**72.4%**) by **+3.5 percentage points**. This demonstrates that our framework not only matches but exceeds expert-level code reproduction capabilities, representing a significant milestone in autonomous scientific software engineering.
+
+### ② Commercial Code Agents
+
+On the 5-paper subset, DeepCode substantially outperforms leading commercial coding tools: **Cursor** (58.4%), **Claude Code** (58.7%), and **Codex** (40.0%). DeepCode achieves **84.8%**, representing a **+26.1% improvement** over the best commercial agent (Claude Code). All commercial agents utilize Claude Sonnet 4.5-thinking (Cursor and Claude Code) or GPT-5 Codex-high, highlighting that DeepCode's superior architecture—rather than base model capability—drives this performance gap.
+
+### ③ Scientific Code Agent
+
+Compared to PaperCoder (**51.1%**), the state-of-the-art scientific code reproduction framework, DeepCode achieves **73.5%**, demonstrating a **+22.4% relative improvement**. This substantial margin validates our multi-module architecture combining planning, hierarchical task decomposition, code generation, and iterative debugging over simpler pipeline-based approaches.
+
+### ④ LLM-Based Agents
+
+DeepCode (**73.5%**) significantly outperforms all tested LLM agents, including Claude 3.5 Sonnet with IterativeAgent (27.5%), o1 with IterativeAgent at 36 hours (42.4%), and o1 BasicAgent (43.3%). The **+30.2% improvement** over the best-performing LLM agent demonstrates that sophisticated agent scaffolding, rather than extended inference time or larger models alone, is critical for complex code reproduction tasks.
+
+<div align="center">
+    <img src='./assets/result_main.jpg' /><br>
+</div>
+<br/>
+
 ### 🎯 **Autonomous Multi-Agent Workflow**
 
 **The Challenges**:
@@ -458,32 +486,6 @@ Implementation Generation • Testing • Documentation
 </div>
 
 ---
-
-
-## 📊 Experimental Results
-
-We evaluate **DeepCode** on the PaperBench Code-Dev benchmark, a rigorous testbed requiring AI agents to independently reproduce 20 ICML 2024 papers from scratch. The benchmark comprises 8,316 gradable components assessed using SimpleJudge with hierarchical weighting. Our experiments compare DeepCode against four baseline categories: (1) Human Experts, (2) Commercial Code Agents, (3) Scientific Code Agents, and (4) LLM-Based Agents.
-
-### ① Human Expert Performance (Top ML PhD)
-
-DeepCode achieves **75.9%** on the 3-paper human evaluation subset (with Claude Sonnet 4.5-thinking), surpassing the best-of-3 human expert baseline (**72.4%**) by **+3.5 percentage points**. This demonstrates that our framework not only matches but exceeds expert-level code reproduction capabilities, representing a significant milestone in autonomous scientific software engineering.
-
-### ② Commercial Code Agents
-
-On the 5-paper subset, DeepCode substantially outperforms leading commercial coding tools: **Cursor** (58.4%), **Claude Code** (58.7%), and **Codex** (40.0%). DeepCode achieves **84.8%**, representing a **+26.1% improvement** over the best commercial agent (Claude Code). All commercial agents utilize Claude Sonnet 4.5-thinking (Cursor and Claude Code) or GPT-5 Codex-high, highlighting that DeepCode's superior architecture—rather than base model capability—drives this performance gap.
-
-### ③ Scientific Code Agent
-
-Compared to PaperCoder (**51.1%**), the state-of-the-art scientific code reproduction framework, DeepCode achieves **73.5%**, demonstrating a **+22.4% relative improvement**. This substantial margin validates our multi-module architecture combining planning, hierarchical task decomposition, code generation, and iterative debugging over simpler pipeline-based approaches.
-
-### ④ LLM-Based Agents
-
-DeepCode (**73.5%**) significantly outperforms all tested LLM agents, including Claude 3.5 Sonnet with IterativeAgent (27.5%), o1 with IterativeAgent at 36 hours (42.4%), and o1 BasicAgent (43.3%). The **+30.2% improvement** over the best-performing LLM agent demonstrates that sophisticated agent scaffolding, rather than extended inference time or larger models alone, is critical for complex code reproduction tasks.
-
-<div align="center">
-    <img src='./assets/result_main.jpg' /><br>
-</div>
-<br/>
 
 
 ## 🚀 Quick Start
