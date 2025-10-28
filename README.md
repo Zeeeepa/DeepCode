@@ -148,12 +148,14 @@
 
 ## 📰 News
 
-🎉 **[2025-10-28] DeepCode Achieves State-of-the-Art Performance on PaperBench Code-Dev!**
+🎉 **[2025-10] 🎉 [2025-10-28] DeepCode Achieves SOTA on PaperBench!**
 
-- 🏆 **Surpasses Human Experts**: DeepCode achieves **75.9%** on the 3-paper subset, outperforming **Top ML PhD** (72.4%) by **+3.5%**
-- 🥇 **Outperforms Commercial Agents**: **+26.1%** improvement over best commercial code agents (**Cursor, Claude Code, Codex**) with **84.8%** accuracy
-- 🔬 **Advances Scientific Code Generation**: **+22.4%** improvement over PaperCoder, the previous SOTA scientific code agent
-- 🚀 **Beats LLM-Based Agents**: **+30.2%** improvement over best LLM agent frameworks, demonstrating the power of sophisticated agent architecture
+DeepCode sets new benchmarks on OpenAI's PaperBench Code-Dev across all categories:
+
+- 🏆 **Surpasses Human Experts**: **75.9%** (DeepCode) vs Top Machine Learning PhDs 72.4% (+3.5%).
+- 🥇 **Outperforms SOTA Commercial Code Agents**: **84.8%** (DeepCode) vs learning commercial code agents (+26.1%) (Cursor, Claude Code, and Codex).
+- 🔬 **Advances Scientific Coding**: **73.5%** (DeepCode) vs PaperCoder 51.1% (+22.4%).
+- 🚀 **Beats LLM Agents**: **73.5%** (DeepCode) vs best LLM frameworks 43.3% (+30.2%).
 
 ---
 
