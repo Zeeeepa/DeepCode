@@ -155,7 +155,7 @@
 - 🚀 **Beats LLM-Based Agents**: **+30.2%** improvement over best LLM agent frameworks, demonstrating the power of sophisticated agent architecture
 
 <div align="center">
-    <img src='./assets/result_main.png' /><br>
+    <img src='./assets/result_main.jpg' /><br>
 </div>
 
 ---
