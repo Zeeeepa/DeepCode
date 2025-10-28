@@ -235,6 +235,11 @@
 
 ## 📊 Experimental Results
 
+<div align="center">
+    <img src='./assets/result_main.jpg' /><br>
+</div>
+<br/>
+
 We evaluate **DeepCode** on the [*PaperBench*](https://openai.com/index/paperbench/) benchmark (released by OpenAI), a rigorous testbed requiring AI agents to independently reproduce 20 ICML 2024 papers from scratch. The benchmark comprises 8,316 gradable components assessed using SimpleJudge with hierarchical weighting.
 
 Our experiments compare DeepCode against four baseline categories: **(1) Human Experts**, **(2) State-of-the-Art Commercial Code Agents**, **(3) Scientific Code Agents**, and **(4) LLM-Based Agents**.
@@ -273,12 +278,7 @@ DeepCode significantly outperforms all tested LLM agents:
 - o1 BasicAgent: 43.3%
 - **DeepCode: 73.5%**
 
-The **+30.2% improvement** over the best-performing LLM agent demonstrates that sophisticated agent scaffolding, rather than extended inference time or larger models alone, is critical for complex code reproduction tasks.
-
-<div align="center">
-    <img src='./assets/result_main.jpg' /><br>
-</div>
-<br/>
+The **+30.2% improvement** over the best-performing LLM agent demonstrates that sophisticated agent scaffolding, rather than extended inference time or larger models, is critical for complex code reproduction tasks.
 
 ---
 
