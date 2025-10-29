@@ -153,7 +153,7 @@
 DeepCode sets new benchmarks on OpenAI's PaperBench Code-Dev across all categories:
 
 - 🏆 **Surpasses Human Experts**: **75.9%** (DeepCode) vs Top Machine Learning PhDs 72.4% (+3.5%).
-- 🥇 **Outperforms SOTA Commercial Code Agents**: **84.8%** (DeepCode) vs learning commercial code agents (+26.1%) (Cursor, Claude Code, and Codex).
+- 🥇 **Outperforms SOTA Commercial Code Agents**: **84.8%** (DeepCode) vs Leading Commercial Code Agents (+26.1%) (Cursor, Claude Code, and Codex).
 - 🔬 **Advances Scientific Coding**: **73.5%** (DeepCode) vs PaperCoder 51.1% (+22.4%).
 - 🚀 **Beats LLM Agents**: **73.5%** (DeepCode) vs best LLM frameworks 43.3% (+30.2%).
 
