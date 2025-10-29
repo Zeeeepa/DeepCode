@@ -238,7 +238,7 @@ DeepCode sets new benchmarks on OpenAI's PaperBench Code-Dev across all categori
 ## 📊 Experimental Results
 
 <div align="center">
-    <img src='./assets/result_main.jpg' /><br>
+    <img src='./assets/result_main02.jpg' /><br>
 </div>
 <br/>
 
