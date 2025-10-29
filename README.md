@@ -52,6 +52,15 @@
   </a>
 </div>
 
+<div align="center" style="margin-top: 10px;">
+  <a href="README.md">
+    <img src="https://img.shields.io/badge/English-00d4ff?style=for-the-badge&logo=readme&logoColor=white&labelColor=1a1a2e" alt="English">
+  </a>
+  <a href="README_ZH.md">
+    <img src="https://img.shields.io/badge/中文-00d4ff?style=for-the-badge&logo=readme&logoColor=white&labelColor=1a1a2e" alt="中文">
+  </a>
+</div>
+
 ### 🖥️ **Interface Showcase**
 
 <table align="center" width="100%" style="border: none; border-collapse: collapse; margin: 30px 0;">
@@ -262,7 +271,7 @@ On the 5-paper subset, DeepCode substantially outperforms leading commercial cod
 - Codex: 40.0%
 - **DeepCode: 84.8%**
 
-This represents a **+26.1% improvement** over the leading commercial code agent. All commercial agents utilize Claude Sonnet 4.5-thinking or GPT-5 Codex-high, highlighting that **DeepCode's superior architecture**—rather than base model capability—drives this performance gap.
+This represents a **+26.1% improvement** over the leading commercial code agent. All commercial agents utilize Claude Sonnet 4.5 or GPT-5 Codex-high, highlighting that **DeepCode's superior architecture**—rather than base model capability—drives this performance gap.
 
 ### ③ 🔬 Scientific Code Agents
 

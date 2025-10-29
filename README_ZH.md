@@ -52,6 +52,15 @@
   </a>
 </div>
 
+<div align="center" style="margin-top: 10px;">
+  <a href="README.md">
+    <img src="https://img.shields.io/badge/English-00d4ff?style=for-the-badge&logo=readme&logoColor=white&labelColor=1a1a2e" alt="English">
+  </a>
+  <a href="README_ZH.md">
+    <img src="https://img.shields.io/badge/中文-00d4ff?style=for-the-badge&logo=readme&logoColor=white&labelColor=1a1a2e" alt="中文">
+  </a>
+</div>
+
 ### 🖥️ **界面展示**
 
 <table align="center" width="100%" style="border: none; border-collapse: collapse; margin: 30px 0;">
@@ -133,13 +142,28 @@
 
 ## 📑 目录
 
+- [📰 新闻](#-新闻)
 - [🚀 核心特性](#-核心特性)
 - [🏗️ 架构](#️-架构)
+- [📊 实验结果](#-实验结果)
 - [🚀 快速开始](#-快速开始)
 - [💡 示例](#-示例)
   - [🎬 实时演示](#-实时演示)
 - [⭐ 星标历史](#-星标历史)
 - [📄 许可证](#-许可证)
+
+---
+
+## 📰 新闻
+
+🎉 **[2025-10] 🎉 [2025-10-28] DeepCode在PaperBench上达到最先进水平！**
+
+DeepCode在OpenAI的PaperBench Code-Dev所有类别中创造新基准：
+
+- 🏆 **超越人类专家**: **75.9%** (DeepCode) vs 顶级机器学习博士 72.4% (+3.5%)。
+- 🥇 **超越最先进商业代码智能体**: **84.8%** (DeepCode) vs 领先商业代码智能体 (+26.1%) (Cursor, Claude Code, 和 Codex)。
+- 🔬 **推进科学编程**: **73.5%** (DeepCode) vs PaperCoder 51.1% (+22.4%)。
+- 🚀 **击败LLM智能体**: **73.5%** (DeepCode) vs 最佳LLM框架 43.3% (+30.2%)。
 
 ---
 
@@ -216,6 +240,57 @@
 </table>
 
 <br/>
+
+---
+
+## 📊 实验结果
+
+<div align="center">
+    <img src='./assets/result_main02.jpg' /><br>
+</div>
+<br/>
+
+我们在[*PaperBench*](https://openai.com/index/paperbench/)基准测试（由OpenAI发布）上评估**DeepCode**，这是一个严格的测试平台，要求AI智能体从头独立复现20篇ICML 2024论文。该基准包含8,316个可评分组件，使用带有分层权重的SimpleJudge进行评估。
+
+我们的实验将DeepCode与四个基线类别进行比较：**(1) 人类专家**，**(2) 最先进商业代码智能体**，**(3) 科学代码智能体**，以及 **(4) 基于LLM的智能体**。
+
+### ① 🧠 人类专家表现（顶级机器学习博士）
+
+**DeepCode: 75.9% vs. 顶级机器学习博士: 72.4% (+3.5%)**
+
+DeepCode在3篇论文的人类评估子集上达到**75.9%**，**超越3次人类专家基线（72.4%）+3.5个百分点**。这表明我们的框架不仅匹配而且超越了专家级代码复现能力，代表了自主科学软件工程的重要里程碑。
+
+### ② 💼 最先进商业代码智能体
+
+**DeepCode: 84.8% vs. 最佳商业智能体: 58.7% (+26.1%)**
+
+在5篇论文的子集上，DeepCode大幅超越领先的商业编码工具：
+- Cursor: 58.4%
+- Claude Code: 58.7%
+- Codex: 40.0%
+- **DeepCode: 84.8%**
+
+这代表了相对于领先商业代码智能体的**+26.1%改进**。所有商业智能体都使用Claude Sonnet 4.5或GPT-5 Codex-high，突出了**DeepCode的卓越架构**——而非基础模型能力——推动了这一性能差距。
+
+### ③ 🔬 科学代码智能体
+
+**DeepCode: 73.5% vs. PaperCoder: 51.1% (+22.4%)**
+
+与最先进的科学代码复现框架PaperCoder（**51.1%**）相比，DeepCode达到**73.5%**，展示了**+22.4%的相对改进**。这一显著差距验证了我们结合规划、分层任务分解、代码生成和迭代调试的多模块架构优于简单的管道式方法。
+
+### ④ 🤖 基于LLM的智能体
+
+**DeepCode: 73.5% vs. 最佳LLM智能体: 43.3% (+30.2%)**
+
+DeepCode显著超越所有测试的LLM智能体：
+- Claude 3.5 Sonnet + IterativeAgent: 27.5%
+- o1 + IterativeAgent (36小时): 42.4%
+- o1 BasicAgent: 43.3%
+- **DeepCode: 73.5%**
+
+相对于表现最佳的LLM智能体的**+30.2%改进**表明，复杂的智能体框架，而非延长的推理时间或更大的模型，对于复杂的代码复现任务至关重要。
+
+---
 
 ### 🎯 **自主多智能体工作流**
 
