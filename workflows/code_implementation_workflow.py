@@ -298,7 +298,7 @@ Requirements:
         code_agent = CodeImplementationAgent(
             self.mcp_agent, self.logger, self.enable_read_tools
         )
-        memory_agent = ConciseMemoryAgent(plan_content, self.logger, target_directory)
+        memory_agent = ConciseMemoryAgent(plan_content, self.logger, target_directory, self.default_models)
 
         # Log read tools configuration
         read_tools_status = "ENABLED" if self.enable_read_tools else "DISABLED"
