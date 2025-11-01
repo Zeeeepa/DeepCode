@@ -530,27 +530,31 @@ Requirements:
                 else:
                     client = AsyncOpenAI(api_key=openai_key)
 
+                # Get model name from config
+                model_name = self.default_models.get("openai", "o3-mini")
+
                 # Test connection with default model from config
                 # Try max_tokens first, fallback to max_completion_tokens if unsupported
                 try:
                     await client.chat.completions.create(
-                        model=self.default_models["openai"],
+                        model=model_name,
                         max_tokens=20,
                         messages=[{"role": "user", "content": "test"}],
                     )
                 except Exception as e:
                     if "max_tokens" in str(e) and "max_completion_tokens" in str(e):
                         # Retry with max_completion_tokens for models that require it
+                        self.logger.info(
+                            f"Model {model_name} requires max_completion_tokens parameter"
+                        )
                         await client.chat.completions.create(
-                            model=self.default_models["openai"],
+                            model=model_name,
                             max_completion_tokens=20,
                             messages=[{"role": "user", "content": "test"}],
                         )
                     else:
                         raise
-                self.logger.info(
-                    f"Using OpenAI API with model: {self.default_models['openai']}"
-                )
+                self.logger.info(f"Using OpenAI API with model: {model_name}")
                 if base_url:
                     self.logger.info(f"Using custom base URL: {base_url}")
                 return client, "openai"
@@ -1152,9 +1156,9 @@ async def main():
         # Ask if user wants to continue with actual workflow
         print("\nContinuing with workflow execution...")
 
-        plan_file = "/Users/lizongwei/Desktop/DeepCode_Project/workbase/DeepCode_papertest/deepcode_lab/papers/23/initial_plan.txt"
+        plan_file = "/Users/lizongwei/Desktop/DeepCode_Project/workbase/DeepCode/deepcode_lab/papers/1/initial_plan.txt"
         # plan_file = "/data2/bjdwhzzh/project-hku/Code-Agent2.0/Code-Agent/deepcode-mcp/agent_folders/papers/1/initial_plan.txt"
-        target_directory = "/Users/lizongwei/Desktop/DeepCode_Project/workbase/DeepCode_papertest/deepcode_lab/papers/23/"
+        target_directory = "/Users/lizongwei/Desktop/DeepCode_Project/workbase/DeepCode/deepcode_lab/papers/1/"
         print("Implementation Mode Selection:")
         print("1. Pure Code Implementation Mode (Recommended)")
         print("2. Iterative Implementation Mode")
