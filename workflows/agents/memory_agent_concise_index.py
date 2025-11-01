@@ -61,8 +61,8 @@ class ConciseMemoryAgent:
 
         # Store default models configuration
         self.default_models = default_models or {
-            "anthropic": "claude-sonnet-4-20250514",
-            "openai": "gpt-4o",
+            "anthropic": "anthropic/claude-sonnet-4.5",
+            "openai": "anthropic/claude-sonnet-4.5",
         }
 
         # Memory state tracking - new logic: trigger after each write_file
@@ -186,129 +186,305 @@ class ConciseMemoryAgent:
             return []
 
     def _extract_from_tree_structure(self, lines: List[str]) -> List[str]:
-        """Extract files from tree structure format - only from file_structure section"""
+        """
+        Extract files from tree structure format - Advanced algorithm with multi-strategy approach
+
+        Strategy:
+        1. Precise indentation-based depth calculation
+        2. Smart directory vs file detection using multiple heuristics
+        3. Robust path stack management with depth tracking
+        4. Fallback to regex pattern matching if tree parsing fails
+        """
         files = []
         in_file_structure = False
-        path_stack = []
 
-        for line in lines:
-            # Check if we're in the file_structure section
+        # Enhanced path tracking: store (depth, name) pairs
+        path_stack = []  # [(depth, dir_name), ...]
+        root_dir = None
+
+        # Track the base indentation of tree structure
+        base_indent = None
+
+        for line_num, line in enumerate(lines):
+            # === Section Boundary Detection ===
             if "file_structure:" in line or "file_structure |" in line:
                 in_file_structure = True
                 continue
-            # Check for end of file_structure section (next YAML key)
-            elif (
+
+            # End of file_structure section (next YAML key without indentation)
+            if (
                 in_file_structure
                 and line.strip()
                 and not line.startswith(" ")
                 and ":" in line
             ):
-                # This looks like a new YAML section, stop parsing
                 break
-            elif not in_file_structure:
+
+            if not in_file_structure:
                 continue
 
             if not line.strip():
                 continue
 
-            # Skip lines that look like YAML keys (contain ":" but not file paths)
-            if ":" in line and not ("." in line and "/" in line):
+            # Skip YAML comments and keys that are clearly not files
+            stripped = line.strip()
+            if stripped.startswith("#") or (
+                stripped.endswith(":") and "/" not in stripped
+            ):
                 continue
 
-            stripped_line = line.strip()
+            # === Root Directory Detection ===
+            # Pattern: "project-name/" at minimal indentation, no tree chars
+            if stripped.endswith("/") and not any(
+                c in line for c in ["├", "└", "│", "─"]
+            ):
+                indent = len(line) - len(line.lstrip())
+                if indent <= 4:  # Root level
+                    root_dir = stripped.rstrip("/")
+                    path_stack = []
+                    base_indent = None
+                    self.logger.debug(f"🌳 Detected root directory: {root_dir}")
+                    continue
 
-            # Detect root directory (directory name ending with / at minimal indentation)
-            if (
-                stripped_line.endswith("/")
-                and len(line) - len(line.lstrip())
-                <= 4  # Minimal indentation (0-4 spaces)
-                and not any(char in line for char in ["├", "└", "│", "─"])
-            ):  # No tree characters
-                root_directory = stripped_line.rstrip("/")
-                path_stack = [root_directory]
+            # === Tree Structure Line Detection ===
+            has_tree_chars = any(c in line for c in ["├", "└", "│", "─"])
+            if not has_tree_chars:
                 continue
 
-            # Only process lines that have tree structure
-            if not any(char in line for char in ["├", "└", "│", "─"]):
-                continue
+            # === Calculate Precise Depth ===
+            # Method: Count the actual tree structure symbols to determine hierarchy
+            indent = len(line) - len(line.lstrip())
 
-            # Parse tree structure depth by analyzing the line structure
-            # Count │ characters before the actual item, or use indentation as fallback
-            pipe_count = 0
+            # Set base indent on first tree line
+            if base_indent is None:
+                base_indent = indent
 
-            for i, char in enumerate(line):
-                if char == "│":
-                    pipe_count += 1
-                elif char in ["├", "└"]:
+            # Count tree depth indicators
+            # Each "│   " or "    " block represents one level
+            # "├── " or "└── " marks the current item
+            tree_prefix = line[
+                : line.find("├")
+                if "├" in line
+                else line.find("└")
+                if "└" in line
+                else len(line)
+            ]
+
+            # Count depth by analyzing tree prefix structure
+            # Pattern: "    │   │   ├── filename" -> depth 3
+            # Pattern: "    ├── filename" -> depth 1
+            # Pattern: "    │   ├── filename" -> depth 2
+
+            depth = 0
+            i = 0
+            while i < len(tree_prefix):
+                # Look for pipe or tree junction
+                if i + 4 <= len(tree_prefix):
+                    chunk = tree_prefix[i : i + 4]
+                    if "│" in chunk or all(c == " " for c in chunk):
+                        depth += 1
+                        i += 4
+                    else:
+                        i += 1
+                else:
                     break
 
-            # Calculate depth: use pipe count if available, otherwise use indentation
-            if pipe_count > 0:
-                depth = pipe_count + 1  # +1 because the actual item is one level deeper
-            else:
-                # Use indentation to determine depth (every 4 spaces = 1 level)
-                indent_spaces = len(line) - len(line.lstrip())
-                depth = max(1, indent_spaces // 4)  # At least depth 1
+            # Fallback: use relative indentation
+            if depth == 0:
+                depth = max(1, (indent - base_indent) // 4 + 1)
 
-            # Clean the line to get the item name
-            clean_line = line
-            for char in ["├──", "└──", "├", "└", "│", "─"]:
-                clean_line = clean_line.replace(char, "")
-            clean_line = clean_line.strip()
+            # === Clean and Extract Item Name ===
+            item_name = line
+            # Remove all tree characters
+            for pattern in ["├──", "└──", "│", "├", "└", "─"]:
+                item_name = item_name.replace(pattern, "")
+            item_name = item_name.strip()
 
-            if not clean_line or ":" in clean_line:
+            # Remove inline comments
+            if "#" in item_name:
+                item_name = item_name.split("#")[0].strip()
+
+            if not item_name or ":" in item_name:
                 continue
 
-            # Extract filename (remove comments)
-            if "#" in clean_line:
-                filename = clean_line.split("#")[0].strip()
-            else:
-                filename = clean_line.strip()
+            # === Smart Directory vs File Detection ===
+            is_directory = self._is_directory(item_name)
 
-            # Skip empty filenames
-            if not filename:
-                continue
-
-            # Adjust path stack to current depth
-            while len(path_stack) < depth:
-                path_stack.append("")
-            path_stack = path_stack[:depth]
-
-            # Determine if it's a directory or file
-            is_directory = (
-                filename.endswith("/")
-                or (
-                    "." not in filename
-                    and filename not in ["README", "requirements.txt", "setup.py"]
-                )
-                or filename
-                in [
-                    "core",
-                    "networks",
-                    "environments",
-                    "baselines",
-                    "evaluation",
-                    "experiments",
-                    "utils",
-                    "src",
-                    "lib",
-                    "app",
-                ]
-            )
+            # === Update Path Stack ===
+            # Remove items deeper than current depth
+            path_stack = [(d, n) for d, n in path_stack if d < depth]
 
             if is_directory:
-                directory_name = filename.rstrip("/")
-                if directory_name and ":" not in directory_name:
-                    path_stack.append(directory_name)
+                dir_name = item_name.rstrip("/")
+                path_stack.append((depth, dir_name))
+                self.logger.debug(f"  {'  ' * depth}📁 {dir_name} (depth={depth})")
             else:
-                # It's a file, construct full path
-                if path_stack:
-                    full_path = "/".join(path_stack) + "/" + filename
-                else:
-                    full_path = filename
+                # Construct full file path
+                path_parts = [root_dir] if root_dir else []
+                path_parts.extend([name for _, name in path_stack])
+                path_parts.append(item_name)
+
+                full_path = "/".join(path_parts)
                 files.append(full_path)
+                self.logger.debug(f"  {'  ' * depth}📄 {full_path}")
 
         return files
+
+    def _is_directory(self, name: str) -> bool:
+        """
+        Advanced directory detection using multiple heuristics
+
+        Returns True if the name represents a directory, False if it's a file
+        """
+        # Rule 1: Explicit directory marker
+        if name.endswith("/"):
+            return True
+
+        # Rule 2: Has file extension -> definitely a file
+        basename = name.split("/")[-1]
+        if "." in basename:
+            # Check if it's a known file extension
+            known_extensions = [
+                ".py",
+                ".js",
+                ".ts",
+                ".jsx",
+                ".tsx",
+                ".vue",
+                ".html",
+                ".css",
+                ".scss",
+                ".sass",
+                ".json",
+                ".yaml",
+                ".yml",
+                ".xml",
+                ".toml",
+                ".md",
+                ".txt",
+                ".rst",
+                ".sh",
+                ".bat",
+                ".ps1",
+                ".c",
+                ".cpp",
+                ".h",
+                ".hpp",
+                ".java",
+                ".go",
+                ".rs",
+                ".sql",
+                ".db",
+                ".env",
+                ".gitignore",
+                ".dockerignore",
+                ".lock",
+                ".sum",
+                ".mod",
+            ]
+            if any(basename.lower().endswith(ext) for ext in known_extensions):
+                return False
+
+            # Has extension but not recognized -> might be config file, treat as file
+            if basename.count(".") == 1:
+                return False
+
+        # Rule 3: Known special files without extensions
+        special_files = [
+            "README",
+            "LICENSE",
+            "CHANGELOG",
+            "CONTRIBUTING",
+            "Makefile",
+            "Dockerfile",
+            "Vagrantfile",
+            "requirements.txt",
+            "setup.py",
+            "setup.cfg",
+            "package.json",
+            "package-lock.json",
+            "Cargo.toml",
+            "go.mod",
+        ]
+        if basename in special_files or basename.upper() in special_files:
+            return False
+
+        # Rule 4: Common directory names (even without trailing /)
+        common_dirs = [
+            "src",
+            "lib",
+            "app",
+            "core",
+            "api",
+            "web",
+            "client",
+            "server",
+            "config",
+            "configs",
+            "settings",
+            "data",
+            "datasets",
+            "models",
+            "model",
+            "utils",
+            "helpers",
+            "common",
+            "shared",
+            "tests",
+            "test",
+            "testing",
+            "__tests__",
+            "docs",
+            "documentation",
+            "scripts",
+            "bin",
+            "tools",
+            "assets",
+            "static",
+            "public",
+            "resources",
+            "components",
+            "views",
+            "pages",
+            "routes",
+            "services",
+            "controllers",
+            "handlers",
+            "middleware",
+            "middlewares",
+            "types",
+            "interfaces",
+            "schemas",
+            "experiments",
+            "notebooks",
+            "dist",
+            "build",
+            "output",
+            "node_modules",
+            "vendor",
+            "packages",
+            "__pycache__",
+            ".git",
+            ".vscode",
+            "training",
+            "evaluation",
+            "inference",
+        ]
+        if basename.lower() in common_dirs:
+            return True
+
+        # Rule 5: Plural forms often indicate directories
+        if basename.endswith("s") and len(basename) > 3:
+            singular = basename[:-1]
+            if singular in common_dirs:
+                return True
+
+        # Rule 6: Python package indicators
+        if basename == "__init__.py":
+            return False  # This is a file
+
+        # Default: if no extension and not a known file, likely a directory
+        return "." not in basename
 
     def _extract_from_simple_list(self, lines: List[str]) -> List[str]:
         """Extract files from simple list format (- filename)"""
@@ -331,98 +507,246 @@ class ConciseMemoryAgent:
         return files
 
     def _extract_from_plan_content(self, lines: List[str]) -> List[str]:
-        """Extract files from anywhere in the plan content"""
+        """
+        Advanced fallback extraction: Extract files from anywhere in the plan content
+        Uses multiple regex patterns and intelligent filtering
+        """
         files = []
-
-        # Look for common file patterns
         import re
 
-        file_patterns = [
-            r"([a-zA-Z0-9_\-/]+\.[a-zA-Z0-9]+)",  # filename.ext
-            r'"([a-zA-Z0-9_\-/]+\.[a-zA-Z0-9]+)"',  # "filename.ext"
-        ]
+        # === Pattern 1: Standard file paths ===
+        # Matches: path/to/file.py, src/model/apt_layer.py
+        pattern1 = r"([a-zA-Z0-9_\-]+(?:/[a-zA-Z0-9_\-]+)+\.[a-zA-Z0-9]+)"
+
+        # === Pattern 2: Quoted file paths ===
+        # Matches: "path/to/file.py", 'src/utils.py'
+        pattern2 = r'["\']([a-zA-Z0-9_\-]+(?:/[a-zA-Z0-9_\-]+)+\.[a-zA-Z0-9]+)["\']'
+
+        # === Pattern 3: File paths with special characters ===
+        # Matches: data/data_loader.py, __init__.py paths
+        pattern3 = r"([a-zA-Z0-9_\-]+(?:/[a-zA-Z0-9_\-]+)*/__init__\.py)"
+        pattern4 = r"([a-zA-Z0-9_\-]+(?:/[a-zA-Z0-9_\-]+)+\.(?:py|js|ts|jsx|tsx|html|css|md|txt|json|yaml|yml|xml|sql|sh|bat))"
+
+        # === Pattern 5: Backtick-wrapped paths (in code blocks) ===
+        pattern5 = r"`([a-zA-Z0-9_\-]+(?:/[a-zA-Z0-9_\-]+)+\.[a-zA-Z0-9]+)`"
+
+        all_patterns = [pattern1, pattern2, pattern3, pattern4, pattern5]
+
+        # Collect all potential matches
+        potential_files = set()
 
         for line in lines:
-            for pattern in file_patterns:
+            # Skip comment-only lines
+            stripped = line.strip()
+            if stripped.startswith("#") and not ("/" in stripped and "." in stripped):
+                continue
+
+            # Apply all patterns
+            for pattern in all_patterns:
                 matches = re.findall(pattern, line)
-                for match in matches:
-                    # Only include if it looks like a code file (exclude media files)
-                    if "/" in match and any(
-                        ext in match
-                        for ext in [
-                            ".py",
-                            ".js",
-                            ".html",
-                            ".css",
-                            ".md",
-                            ".txt",
-                            ".json",
-                            ".yaml",
-                            ".yml",
-                            ".xml",
-                            ".sql",
-                            ".sh",
-                            ".ts",
-                            ".jsx",
-                            ".tsx",
-                        ]
-                    ):
-                        files.append(match)
+                potential_files.update(matches)
 
-        return files
-
-    def _clean_and_validate_files(self, files: List[str]) -> List[str]:
-        """Clean and validate extracted file paths - only keep code files"""
-        cleaned_files = []
-
-        # Define code file extensions we want to track
-        code_extensions = [
+        # === Filter and validate matches ===
+        code_extensions = {
             ".py",
             ".js",
-            ".html",
-            ".css",
-            ".md",
-            ".txt",
-            ".json",
-            ".yaml",
-            ".yml",
-            ".xml",
-            ".sql",
-            ".sh",
-            ".bat",
-            ".dockerfile",
-            ".env",
-            ".gitignore",
             ".ts",
             ".jsx",
             ".tsx",
             ".vue",
-            ".php",
-            ".rb",
-            ".go",
-            ".rs",
-            ".cpp",
+            ".html",
+            ".css",
+            ".scss",
+            ".sass",
+            ".less",
+            ".json",
+            ".yaml",
+            ".yml",
+            ".toml",
+            ".xml",
+            ".ini",
+            ".cfg",
+            ".md",
+            ".rst",
+            ".txt",
+            ".sh",
+            ".bash",
+            ".zsh",
+            ".bat",
+            ".ps1",
+            ".cmd",
             ".c",
+            ".cpp",
             ".h",
             ".hpp",
+            ".cc",
+            ".cxx",
             ".java",
             ".kt",
-            ".swift",
-            ".dart",
-        ]
+            ".scala",
+            ".go",
+            ".rs",
+            ".php",
+            ".rb",
+            ".pl",
+            ".lua",
+            ".r",
+            ".sql",
+            ".db",
+            ".dockerfile",
+            ".env",
+            ".gitignore",
+            ".lock",
+            ".sum",
+            ".mod",
+        }
+
+        for file_path in potential_files:
+            # Must have path separator
+            if "/" not in file_path:
+                continue
+
+            # Must have valid extension
+            has_valid_ext = any(
+                file_path.lower().endswith(ext) for ext in code_extensions
+            )
+            if not has_valid_ext:
+                continue
+
+            # Filter out obvious non-files
+            if any(
+                bad in file_path.lower()
+                for bad in [
+                    "http://",
+                    "https://",
+                    ".png",
+                    ".jpg",
+                    ".jpeg",
+                    ".gif",
+                    ".svg",
+                    ".ico",
+                ]
+            ):
+                continue
+
+            # Must not be too short (avoid false positives)
+            if len(file_path) < 5:
+                continue
+
+            # Path components should be reasonable
+            parts = file_path.split("/")
+            if any(len(part) == 0 for part in parts):
+                continue
+
+            files.append(file_path)
+
+        # Sort for consistency
+        files = sorted(list(set(files)))
+
+        return files
+
+    def _clean_and_validate_files(self, files: List[str]) -> List[str]:
+        """
+        Clean and validate extracted file paths - advanced filtering and deduplication
+
+        Features:
+        1. Remove duplicates while preserving order
+        2. Normalize paths (handle ../,  ./, double slashes)
+        3. Filter out non-code files
+        4. Smart deduplication (recognize same file with different path prefixes)
+        """
+        cleaned_files = []
+        seen_normalized = set()
+
+        # Define code file extensions we want to track
+        code_extensions = {
+            ".py",
+            ".js",
+            ".ts",
+            ".jsx",
+            ".tsx",
+            ".vue",
+            ".html",
+            ".css",
+            ".scss",
+            ".sass",
+            ".less",
+            ".json",
+            ".yaml",
+            ".yml",
+            ".toml",
+            ".xml",
+            ".ini",
+            ".cfg",
+            ".md",
+            ".rst",
+            ".txt",
+            ".sh",
+            ".bash",
+            ".zsh",
+            ".bat",
+            ".ps1",
+            ".cmd",
+            ".c",
+            ".cpp",
+            ".h",
+            ".hpp",
+            ".cc",
+            ".cxx",
+            ".java",
+            ".kt",
+            ".scala",
+            ".go",
+            ".rs",
+            ".php",
+            ".rb",
+            ".pl",
+            ".lua",
+            ".r",
+            ".sql",
+            ".db",
+            ".dockerfile",
+            ".env",
+            ".gitignore",
+            ".lock",
+            ".sum",
+            ".mod",
+        }
 
         for file_path in files:
-            # Clean the path
-            cleaned_path = file_path.strip().strip('"').strip("'")
+            # === Step 1: Basic Cleaning ===
+            cleaned_path = file_path.strip().strip('"').strip("'").strip("`")
 
-            # Skip if empty
             if not cleaned_path:
                 continue
 
-            # Skip directories (no file extension)
-            if "." not in cleaned_path.split("/")[-1]:
+            # Remove leading/trailing slashes
+            cleaned_path = cleaned_path.strip("/")
+
+            # === Step 2: Path Normalization ===
+            # Remove double slashes
+            while "//" in cleaned_path:
+                cleaned_path = cleaned_path.replace("//", "/")
+
+            # Handle relative paths (remove ./ prefix)
+            if cleaned_path.startswith("./"):
+                cleaned_path = cleaned_path[2:]
+
+            # === Step 3: Validate File Structure ===
+            # Must have filename (not just directory)
+            if not cleaned_path or "/" not in cleaned_path:
+                # Single file without path - only accept if it has extension
+                if "." not in cleaned_path:
+                    continue
+
+            # Extract basename
+            basename = cleaned_path.split("/")[-1]
+
+            # Skip directories (no file extension in basename)
+            if "." not in basename:
                 continue
 
+            # === Step 4: Extension Validation ===
             # Only include files with code extensions
             has_code_extension = any(
                 cleaned_path.lower().endswith(ext) for ext in code_extensions
@@ -430,21 +754,69 @@ class ConciseMemoryAgent:
             if not has_code_extension:
                 continue
 
+            # === Step 5: Filter Invalid Patterns ===
             # Skip files that look like YAML keys or config entries
-            if (
-                ":" in cleaned_path
-                and not cleaned_path.endswith(".yaml")
-                and not cleaned_path.endswith(".yml")
+            if ":" in cleaned_path and not any(
+                cleaned_path.endswith(ext) for ext in [".yaml", ".yml"]
             ):
                 continue
 
-            # Skip paths that contain invalid characters for file paths
-            if any(invalid_char in cleaned_path for invalid_char in ['"', "'", "|"]):
+            # Skip paths with invalid characters
+            if any(
+                char in cleaned_path for char in ['"', "'", "|", "<", ">", "*", "?"]
+            ):
                 continue
 
-            # Add to cleaned list if not already present
-            if cleaned_path not in cleaned_files:
-                cleaned_files.append(cleaned_path)
+            # Skip obvious build/temp artifacts
+            if any(
+                part in cleaned_path
+                for part in [
+                    "__pycache__",
+                    ".pyc",
+                    "node_modules",
+                    ".git/",
+                    "dist/build",
+                ]
+            ):
+                continue
+
+            # === Step 6: Smart Deduplication ===
+            # Normalize for comparison (lowercase, remove common prefixes)
+            normalized_for_comparison = cleaned_path.lower()
+
+            # Check if we've already seen this file (exact match)
+            if normalized_for_comparison in seen_normalized:
+                continue
+
+            # Check for duplicate with different path (e.g., "src/model/apt_layer.py" vs "model/apt_layer.py")
+            # Keep the longer (more specific) path
+            is_duplicate = False
+            paths_to_remove = []
+
+            for existing_normalized in seen_normalized:
+                # If current path is suffix of existing, it's a shorter version - skip it
+                if existing_normalized.endswith("/" + normalized_for_comparison):
+                    is_duplicate = True
+                    break
+
+                # If existing path is suffix of current, current is longer - replace existing
+                if normalized_for_comparison.endswith("/" + existing_normalized):
+                    paths_to_remove.append(existing_normalized)
+
+            if is_duplicate:
+                continue
+
+            # Remove shorter versions
+            for path_to_remove in paths_to_remove:
+                seen_normalized.discard(path_to_remove)
+                # Also remove from cleaned_files list
+                cleaned_files = [
+                    f for f in cleaned_files if f.lower() != path_to_remove
+                ]
+
+            # === Step 7: Add to Results ===
+            seen_normalized.add(normalized_for_comparison)
+            cleaned_files.append(cleaned_path)
 
         return sorted(cleaned_files)
 
@@ -996,6 +1368,15 @@ class ConciseMemoryAgent:
         # Get formatted file lists
         file_lists = self.get_formatted_files_lists()
         implemented_files_list = file_lists["implemented"]
+        unimplemented_files_list = file_lists["unimplemented"]
+
+        # Debug output for unimplemented files (clean format without dashes)
+        unimplemented_files = self.get_unimplemented_files()
+        print("✅ Unimplemented Files:")
+        for file_path in unimplemented_files:
+            print(f"{file_path}")
+        if self.current_next_steps.strip():
+            print(f"\n📋 {self.current_next_steps}")
 
         # 1. Add initial plan message (always preserved)
         initial_plan_message = {
@@ -1012,7 +1393,12 @@ class ConciseMemoryAgent:
 
 **Current Status:** {files_implemented} files implemented
 
-**Objective:** Continue implementation by analyzing dependencies and implementing the next required file according to the plan's priority order.""",
+**Remaining Files to Implement:**
+{unimplemented_files_list}
+
+**IMPORTANT:** If the remaining files list shows "All files implemented!", you MUST reply with "All files implemented" to complete the task. Do NOT continue calling tools.
+
+**Objective:** {"Reply 'All files implemented' to finish" if not unimplemented_files else "Continue implementation by analyzing dependencies and implementing the next required file according to the plan's priority order."}""",
         }
 
         # Append Next Steps information if available
@@ -1020,14 +1406,6 @@ class ConciseMemoryAgent:
             initial_plan_message["content"] += (
                 f"\n\n**Next Steps (from previous analysis):**\n{self.current_next_steps}"
             )
-
-        # Debug output for unimplemented files (clean format without dashes)
-        unimplemented_files = self.get_unimplemented_files()
-        print("✅ Unimplemented Files:")
-        for file_path in unimplemented_files:
-            print(f"{file_path}")
-        if self.current_next_steps.strip():
-            print(f"\n📋 {self.current_next_steps}")
 
         concise_messages.append(initial_plan_message)
 
@@ -1039,14 +1417,16 @@ class ConciseMemoryAgent:
 
 **Development Cycle - START HERE:**
 
-**For NEW file implementation:**
+**FIRST - Check completion status:**
+- If "Remaining Files to Implement" above shows "All files implemented!", reply "All files implemented" immediately
+
+**For NEW file implementation (if remaining files exist):**
 1. **You need to call read_code_mem(already_implemented_file_path)** to understand existing implementations and dependencies - agent should choose relevant ALREADY IMPLEMENTED file paths for reference, NOT the new file you want to create
 2. `search_code_references` → OPTIONALLY search reference patterns for inspiration (use for reference only, original paper specs take priority)
-3. `write_file` → Create the complete code implementation based on original paper requirements
-4. `execute_python` or `execute_bash` → Test the partial implementation if needed
+4. Write_file can be used to implement the new component
+3. Finally: Use execute_python or execute_bash for testing (if needed)
 
-**When all files implemented:**
-**Use execute_python or execute_bash** to test the complete implementation""",
+**Remember:** Stop and declare completion when all files are done!""",
         }
         concise_messages.append(knowledge_base_message)
 
@@ -1074,10 +1454,10 @@ class ConciseMemoryAgent:
 1. **You need to call read_code_mem(already_implemented_file_path)** to understand existing implementations and dependencies - agent should choose relevant ALREADY IMPLEMENTED file paths for reference, NOT the new file you want to create
 2. `search_code_references` → OPTIONALLY search reference patterns for inspiration (use for reference only, original paper specs take priority)
 3. Write_file can be used to implement the new component
-4. Finally: Use execute_python or execute_bash for testing (if needed)
+4. OPTIONALLY: Use execute_python or execute_bash if meet some specific requirements (if needed)
 
 **When all files implemented:**
-1. **Use execute_python or execute_bash** to test the complete implementation"""
+1. **Use execute_python or execute_bash** to test the complete implementation (if needed)"""
 
             # # Append Next Steps information if available (even when no tool results)
             # if self.current_next_steps.strip():
@@ -1322,12 +1702,69 @@ class ConciseMemoryAgent:
     def get_unimplemented_files(self) -> List[str]:
         """
         Get list of files that haven't been implemented yet
+        Uses fuzzy path matching to handle partial paths
 
         Returns:
             List of file paths that still need to be implemented
         """
-        implemented_set = set(self.implemented_files)
-        unimplemented = [f for f in self.all_files_list if f not in implemented_set]
+
+        # def is_implemented(plan_file: str) -> bool:
+        #     """Check if a file from plan is implemented (with fuzzy matching)"""
+        #     # Normalize paths for comparison
+        #     plan_file_normalized = plan_file.replace("\\", "/").strip("/")
+        #     plan_filename = plan_file_normalized.split("/")[-1]  # Extract filename
+
+        #     for impl_file in self.implemented_files:
+        #         impl_file_normalized = impl_file.replace("\\", "/").strip("/")
+        #         impl_filename = impl_file_normalized.split("/")[-1]  # Extract filename
+
+        #         # Strategy 1: Exact path match
+        #         if plan_file_normalized == impl_file_normalized:
+        #             return True
+
+        #         # Strategy 2: One path ends with the other (partial path match)
+        #         if plan_file_normalized.endswith(
+        #             impl_file_normalized
+        #         ) or impl_file_normalized.endswith(plan_file_normalized):
+        #             # Ensure match is at a path boundary (not middle of directory name)
+        #             if (
+        #                 plan_file_normalized.endswith("/" + impl_file_normalized)
+        #                 or impl_file_normalized.endswith("/" + plan_file_normalized)
+        #             ):
+        #                 return True
+
+        #         # Strategy 3: Same filename (fallback for different directory structures)
+        #         # Only match if filenames are identical and reasonably unique (length > 5)
+        #         if (plan_filename == impl_filename and len(plan_filename) > 5):
+        #             return True
+
+        #     return False
+        def is_implemented(plan_file: str) -> bool:
+            """Check if a file from plan is implemented (with fuzzy matching)"""
+            # Normalize paths for comparison
+            plan_file_normalized = plan_file.replace("\\", "/").strip("/")
+
+            for impl_file in self.implemented_files:
+                impl_file_normalized = impl_file.replace("\\", "/").strip("/")
+
+                # Check if plan_file ends with impl_file (partial path match)
+                # or impl_file ends with plan_file (reverse partial match)
+                if plan_file_normalized.endswith(
+                    impl_file_normalized
+                ) or impl_file_normalized.endswith(plan_file_normalized):
+                    # Ensure match is at a path boundary (not middle of directory name)
+                    if (
+                        plan_file_normalized.endswith("/" + impl_file_normalized)
+                        or plan_file_normalized == impl_file_normalized
+                        or impl_file_normalized.endswith("/" + plan_file_normalized)
+                    ):
+                        return True
+            return False
+
+        # unimplemented = [f for f in self.all_files_list if not is_implemented(f)]
+        # return unimplemented
+
+        unimplemented = [f for f in self.all_files_list if not is_implemented(f)]
         return unimplemented
 
     def get_formatted_files_lists(self) -> Dict[str, str]:
