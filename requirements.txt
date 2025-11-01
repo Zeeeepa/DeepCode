@@ -6,6 +6,7 @@ docling
 mcp-agent
 mcp-server-git
 nest_asyncio
+openai
 pathlib2
 PyPDF2>=2.0.0
 reportlab>=3.5.0

@@ -3,7 +3,7 @@ anthropic: null
 default_search_server: brave
 document_segmentation:
   enabled: true
-  size_threshold_chars: 50000
+  size_threshold_chars: 3000
 execution_engine: asyncio
 logger:
   level: info
@@ -84,8 +84,8 @@ mcp:
       env:
         PYTHONPATH: .
 openai:
-  base_max_tokens: 16384
-  default_model: anthropic/claude-3.5-sonnet
+  base_max_tokens: 20000
+  default_model: anthropic/claude-sonnet-4.5
   max_tokens_policy: adaptive
   retry_max_tokens: 32768
 planning_mode: traditional
