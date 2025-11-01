@@ -1338,23 +1338,57 @@ class ConciseMemoryAgent:
             """Check if a file from plan is implemented (with fuzzy matching)"""
             # Normalize paths for comparison
             plan_file_normalized = plan_file.replace("\\", "/").strip("/")
+            plan_filename = plan_file_normalized.split("/")[-1]  # Extract filename
 
             for impl_file in self.implemented_files:
                 impl_file_normalized = impl_file.replace("\\", "/").strip("/")
+                impl_filename = impl_file_normalized.split("/")[-1]  # Extract filename
 
-                # Check if plan_file ends with impl_file (partial path match)
-                # or impl_file ends with plan_file (reverse partial match)
+                # Strategy 1: Exact path match
+                if plan_file_normalized == impl_file_normalized:
+                    return True
+
+                # Strategy 2: One path ends with the other (partial path match)
                 if plan_file_normalized.endswith(
                     impl_file_normalized
                 ) or impl_file_normalized.endswith(plan_file_normalized):
                     # Ensure match is at a path boundary (not middle of directory name)
-                    if (
-                        plan_file_normalized.endswith("/" + impl_file_normalized)
-                        or plan_file_normalized == impl_file_normalized
-                        or impl_file_normalized.endswith("/" + plan_file_normalized)
-                    ):
+                    if plan_file_normalized.endswith(
+                        "/" + impl_file_normalized
+                    ) or impl_file_normalized.endswith("/" + plan_file_normalized):
                         return True
+
+                # Strategy 3: Same filename (fallback for different directory structures)
+                # Only match if filenames are identical and reasonably unique (length > 5)
+                if plan_filename == impl_filename and len(plan_filename) > 5:
+                    return True
+
             return False
+
+        # def is_implemented(plan_file: str) -> bool:
+        #     """Check if a file from plan is implemented (with fuzzy matching)"""
+        #     # Normalize paths for comparison
+        #     plan_file_normalized = plan_file.replace("\\", "/").strip("/")
+
+        #     for impl_file in self.implemented_files:
+        #         impl_file_normalized = impl_file.replace("\\", "/").strip("/")
+
+        #         # Check if plan_file ends with impl_file (partial path match)
+        #         # or impl_file ends with plan_file (reverse partial match)
+        #         if plan_file_normalized.endswith(
+        #             impl_file_normalized
+        #         ) or impl_file_normalized.endswith(plan_file_normalized):
+        #             # Ensure match is at a path boundary (not middle of directory name)
+        #             if (
+        #                 plan_file_normalized.endswith("/" + impl_file_normalized)
+        #                 or plan_file_normalized == impl_file_normalized
+        #                 or impl_file_normalized.endswith("/" + plan_file_normalized)
+        #             ):
+        #                 return True
+        #     return False
+
+        # unimplemented = [f for f in self.all_files_list if not is_implemented(f)]
+        # return unimplemented
 
         unimplemented = [f for f in self.all_files_list if not is_implemented(f)]
         return unimplemented
