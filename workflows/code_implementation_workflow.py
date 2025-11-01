@@ -182,7 +182,7 @@ class CodeImplementationWorkflow:
 
             message = f"""Analyze the following implementation plan and generate shell commands to create the file tree structure.
 
-Target Directory: {target_directory}/generate_code
+Target Directory: {target_directory}/generate_code/
 
 Implementation Plan:
 {plan_content}
